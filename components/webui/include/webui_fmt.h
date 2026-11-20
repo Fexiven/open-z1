@@ -17,6 +17,7 @@ typedef struct {
     bool job_serving;
     bool sd_mounted;
     uint32_t sd_used_mb, sd_total_mb;
+    int cam_res;                      // index into camera_res_names, -1: no camera
     bool wifi_connected;
     int rssi;
     const char *ip;
@@ -31,7 +32,8 @@ typedef struct {
 // From the report: machine.mpos, .wpos and job.progress ("lines,pct,secs") as
 // the LPC sends them, and its F, S, T, H, A, L and C fields, where present,
 // as arrays of numbers (null for anything else, such as nan); Kernel.cpp
-// get_query_string has their meaning.
+// get_query_string has their meaning. camera: {"res":"640x480","options":
+// [...camera_res_names]}, or null without a camera.
 size_t webui_status_json(const webui_status_t *s, char *out, size_t cap);
 
 // Replaces every dotted IPv4 address in text other than keep (the board's

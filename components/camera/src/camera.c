@@ -1,4 +1,5 @@
 #include "camera.h"
+#include "camera_res.h"
 
 #include <errno.h>
 #include <stdatomic.h>
@@ -15,6 +16,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "lwip/sockets.h"
+#include "nvs.h"
 #include "sdkconfig.h"
 #include "wifi_mgr.h"
 
@@ -33,17 +35,23 @@ static const char *TAG = "camera";
 #define CAMERA_HMIRROR false
 #endif
 #define SNAP_WAIT_MS 300  // port 80 has one httpd task: a snapshot never holds it long
-#define JPEG_QUALITY 15  // about 15 KB per 640x480 frame (stock: about 13 KB)
+// About 15 KB per 640x480 frame (stock: about 13 KB); the larger sizes grow
+// with the pixel count (1600x1200: roughly 6x), well within the UXGA buffers.
+#define JPEG_QUALITY 15
+#define LINK_WAIT_TICKS (pdMS_TO_TICKS(100) > 0 ? pdMS_TO_TICKS(100) : 1)  // in 1-tick steps (10 ms at 100 Hz)
+#define NVS_NS "open-z1"
+#define NVS_KEY_RES "cam_res"  // u8, an index into camera_res_names
 
 static httpd_handle_t s_httpd;
 static bool (*s_session_active)(void);
+static bool (*s_link_busy)(void);
 static SemaphoreHandle_t s_sent;
 static portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 // One viewer, as stock: the fd that sent start_stream last; -1: none.
 static int s_viewer = -1;
 // Web UI snapshots. The camera task is the only caller of esp_camera_fb_get,
 // so a stream loses no frame. While it streams, it publishes the frame it is
-// sending (and holds it until its pause ends): camera_snapshot copies that one.
+// sending (until it is sent): camera_snapshot copies that one.
 // Otherwise camera_snapshot asks, and the camera task hands over a copy of
 // the next frame.
 static SemaphoreHandle_t s_snap_lock, s_snap_done, s_fb_lock;
@@ -54,6 +62,10 @@ static uint8_t *s_snap_buf;  // s_mux
 static size_t s_snap_len;    // s_mux
 static bool s_snap_nomem;    // s_mux
 static TaskHandle_t s_cam_task;
+// The resolution asked for last (camera_res_names); -1: no camera. The camera
+// task applies it between frames.
+static atomic_int s_res = -1;
+static const framesize_t k_sizes[CAMERA_RES_COUNT] = {FRAMESIZE_VGA, FRAMESIZE_HD, FRAMESIZE_UXGA};
 
 static const camera_config_t k_cam = {
     .pin_pwdn = CONFIG_Z1_CAMERA_PWDN_GPIO,
@@ -78,7 +90,7 @@ static const camera_config_t k_cam = {
     .pixel_format = PIXFORMAT_JPEG,
     // Initialised for UXGA, as stock does, so the buffers hold any JPEG the
     // sensor produces (VGA-sized ones overflow on detailed scenes); switched
-    // to VGA right after.
+    // to the chosen size (camera_res) right after.
     .frame_size = FRAMESIZE_UXGA,
     .jpeg_quality = JPEG_QUALITY,
     .fb_count = 3,  // as stock
@@ -184,9 +196,58 @@ static void hand_over(const camera_fb_t *fb)
     xSemaphoreGive(s_snap_done);
 }
 
+// Runs in the camera task with no frame out (s_cur_fb is NULL), so neither
+// the viewer nor a snapshot ever gets a frame of the old size cut short.
+static void apply_res(int res)
+{
+    sensor_t *sensor = esp_camera_sensor_get();
+    if (sensor->set_framesize(sensor, k_sizes[res]) != 0) {
+        ESP_LOGW(TAG, "could not switch the sensor to %s", camera_res_names[res]);
+        return;
+    }
+    // The buffers may hold frames from before the switch, and the first one
+    // after it can be torn.
+    for (int i = 0; i < k_cam.fb_count; i++) {
+        camera_fb_t *fb = esp_camera_fb_get();
+        if (fb) {
+            esp_camera_fb_return(fb);
+        }
+    }
+    ESP_LOGI(TAG, "resolution %s", camera_res_names[res]);
+}
+
+// The app link has priority: a frame goes out only while the app server has
+// nothing in flight (no queued reply or status, no file transfer). Waits up to
+// LINK_WAIT_TICKS for that; false: drop this frame. While the link stays busy
+// (a long file transfer, a slow client) one frame still goes out every
+// BUSY_FRAME_US, so the picture slows down instead of freezing. A reply that
+// comes up while a frame is being sent waits for that one frame at most.
+#define BUSY_FRAME_US 1000000
+static bool link_free(void)
+{
+    static int64_t last_sent;
+    for (int i = 0; s_link_busy && s_link_busy(); i++) {
+        if (i >= LINK_WAIT_TICKS) {
+            if (esp_timer_get_time() - last_sent < BUSY_FRAME_US) {
+                return false;
+            }
+            break;
+        }
+        vTaskDelay(1);
+    }
+    last_sent = esp_timer_get_time();
+    return true;
+}
+
 static void camera_task(void *arg)
 {
+    int applied = atomic_load(&s_res);  // camera_start set it
     for (;;) {
+        int want = atomic_load(&s_res);
+        if (want != applied) {
+            apply_res(want);
+            applied = want;
+        }
         bool stream = s_session_active() && any_viewer();
         if (!stream && !atomic_load(&s_snap_want)) {
             ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));  // camera_snapshot wakes it at once
@@ -203,17 +264,17 @@ static void camera_task(void *arg)
             esp_camera_fb_return(fb);
             continue;
         }
+        if (!link_free()) {
+            esp_camera_fb_return(fb);  // CAMERA_GRAB_LATEST: the next one is fresh, no backlog
+            continue;
+        }
         xSemaphoreTake(s_fb_lock, portMAX_DELAY);
         s_cur_fb = fb;
         xSemaphoreGive(s_fb_lock);
-        int64_t t0 = esp_timer_get_time();
         if (httpd_queue_work(s_httpd, send_frame, fb) == ESP_OK) {
             xSemaphoreTake(s_sent, portMAX_DELAY);
         }
-        // The app link has priority: idle as long as the frame took to send, so
-        // the stream uses at most half of whatever the uplink carries and a
-        // reply never queues behind a backlog of video.
-        vTaskDelay(pdMS_TO_TICKS((esp_timer_get_time() - t0) / 1000) + 1);
+        vTaskDelay(1);  // let the app server's task in before the next frame
         xSemaphoreTake(s_fb_lock, portMAX_DELAY);
         s_cur_fb = NULL;
         xSemaphoreGive(s_fb_lock);
@@ -263,7 +324,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
 #define HAVE_PSRAM 0  // the frame buffers live in PSRAM
 #endif
 
-esp_err_t camera_start(bool (*session_active)(void))
+esp_err_t camera_start(bool (*session_active)(void), bool (*link_busy)(void))
 {
     if (!pins_configured()) {
         return ESP_ERR_NOT_SUPPORTED;
@@ -288,10 +349,19 @@ esp_err_t camera_start(bool (*session_active)(void))
         ESP_LOGE(TAG, "no camera: %s", esp_err_to_name(err));
         return err;
     }
-    sensor_t *sensor = esp_camera_sensor_get();
-    if (sensor->set_framesize(sensor, FRAMESIZE_VGA) != 0) {
-        ESP_LOGW(TAG, "could not switch the sensor to 640x480");
+    uint8_t res = CAMERA_RES_DEFAULT;
+    nvs_handle_t h;
+    if (nvs_open(NVS_NS, NVS_READONLY, &h) == ESP_OK) {
+        if (nvs_get_u8(h, NVS_KEY_RES, &res) != ESP_OK || res >= CAMERA_RES_COUNT) {
+            res = CAMERA_RES_DEFAULT;
+        }
+        nvs_close(h);
     }
+    sensor_t *sensor = esp_camera_sensor_get();
+    if (sensor->set_framesize(sensor, k_sizes[res]) != 0) {
+        ESP_LOGW(TAG, "could not switch the sensor to %s", camera_res_names[res]);
+    }
+    atomic_store(&s_res, res);
     // Flips relative to the state the driver read back after init (the OV3660
     // init table may already set one). The Z1 flips vertically only, as stock.
     int vflip = sensor->status.vflip ^ (CAMERA_VFLIP ? 1 : 0);
@@ -303,6 +373,7 @@ esp_err_t camera_start(bool (*session_active)(void))
         ESP_LOGI(TAG, "picture flipped (vflip %d, hmirror %d)", vflip, hmirror);
     }
     s_session_active = session_active;
+    s_link_busy = link_busy;
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.server_port = CAM_PORT;
     cfg.ctrl_port = 32000 + CAM_PORT;               // must differ from any other httpd instance
@@ -325,9 +396,11 @@ esp_err_t camera_start(bool (*session_active)(void))
         httpd_stop(s_httpd);
         s_httpd = NULL;
         esp_camera_deinit();
+        atomic_store(&s_res, -1);
         return ESP_ERR_NO_MEM;
     }
-    ESP_LOGI(TAG, "ws://<ip>:%d/ws_video ready (one viewer, the newest wins)", CAM_PORT);
+    ESP_LOGI(TAG, "ws://<ip>:%d/ws_video ready (one viewer, the newest wins), %s", CAM_PORT,
+             camera_res_names[res]);
     return ESP_OK;
 }
 
@@ -375,4 +448,36 @@ esp_err_t camera_snapshot(uint8_t **jpeg, size_t *len)
     portEXIT_CRITICAL(&s_mux);
     xSemaphoreGive(s_snap_lock);
     return *jpeg ? ESP_OK : nomem ? ESP_ERR_NO_MEM : ESP_ERR_TIMEOUT;
+}
+
+int camera_res(void)
+{
+    return s_cam_task ? atomic_load(&s_res) : -1;
+}
+
+esp_err_t camera_set_res(int res)
+{
+    if (!s_cam_task) {
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+    if (res < 0 || res >= CAMERA_RES_COUNT) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (atomic_exchange(&s_res, res) == res) {
+        return ESP_OK;  // no flash write for nothing
+    }
+    xTaskNotifyGive(s_cam_task);
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NVS_NS, NVS_READWRITE, &h);
+    if (err == ESP_OK) {
+        err = nvs_set_u8(h, NVS_KEY_RES, (uint8_t)res);
+        if (err == ESP_OK) {
+            err = nvs_commit(h);
+        }
+        nvs_close(h);
+    }
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "resolution not saved: %s", esp_err_to_name(err));
+    }
+    return err;
 }

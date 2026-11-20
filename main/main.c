@@ -291,7 +291,7 @@ void app_main(void)
         ESP_LOGE(TAG, "control server failed to start: %s", esp_err_to_name(err));
     }
 
-    err = camera_start(ctrl_server_has_clients);
+    err = camera_start(ctrl_server_has_clients, ctrl_server_tx_busy);
     if (err == ESP_ERR_NOT_SUPPORTED) {
         ESP_LOGI(TAG, "camera off on this board/build");
     } else if (err != ESP_OK) {

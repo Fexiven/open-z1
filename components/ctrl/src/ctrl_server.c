@@ -479,6 +479,21 @@ bool ctrl_server_has_clients(void)
     return any;
 }
 
+bool ctrl_server_tx_busy(void)
+{
+    if (!s_lock) {
+        return false;
+    }
+    bool busy = ctrl_server_uploading();
+    ctrl_lock();
+    for (int i = 0; i < CONFIG_Z1_CTRL_MAX_CLIENTS && !busy; i++) {
+        const client_t *c = &ctrl_clients[i];
+        busy = c->fd >= 0 && !c->dead && (c->txq.len > 0 || c->dl.state != XFER_DL_IDLE);
+    }
+    ctrl_unlock();
+    return busy;
+}
+
 void ctrl_server_dump(void)
 {
     char lpc[64];

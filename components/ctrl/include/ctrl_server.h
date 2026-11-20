@@ -24,6 +24,11 @@ bool ctrl_server_has_clients(void);
 // A client is uploading a file.
 bool ctrl_server_uploading(void);
 
+// The app link has something in flight: a client's output queue is not empty,
+// or a file transfer runs. The camera holds its frames back meanwhile. Cheap
+// (one short lock); safe from any task.
+bool ctrl_server_tx_busy(void);
+
 // The LPC's firmware version from its FIRM_VER announcement ("1.1.3"), "" if
 // none came yet.
 void ctrl_server_lpc_version(char *out, size_t cap);

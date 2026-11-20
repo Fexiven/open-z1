@@ -81,8 +81,20 @@ button.sending{opacity:.75;cursor:progress}
 .tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:opacity .2s}
 .tile img.old{opacity:.5}
 #camload{color:var(--ink2);font-size:14px}
-#camoff,#camlive{position:absolute;background:rgba(0,0,0,.6);color:#fff;border:0}
-#camoff{top:8px;right:8px}
+#camoff,#camfull,#camlive{position:absolute;background:rgba(0,0,0,.6);color:#fff;border:0}
+#camoff{top:8px;right:8px}#camfull{top:8px;left:8px}
+#cam{cursor:zoom-in}
+.seg{display:flex;margin-top:12px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{flex:1;min-width:0;border:0;border-radius:0;background:none;font-size:14px;padding:8px 4px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg [aria-pressed=true]{background:var(--ink);color:var(--card)}
+#ov{position:fixed;inset:0;z-index:9;display:flex;background:#000;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);overscroll-behavior:contain;touch-action:pinch-zoom}
+#ovimg{flex:1;min-width:0;width:100%;height:100%;object-fit:contain}
+#ovx,#ovmsg{position:absolute;background:rgba(0,0,0,.6);color:#fff;border:0}
+#ovx{top:calc(8px + env(safe-area-inset-top));right:calc(8px + env(safe-area-inset-right));min-width:44px;font-size:20px}
+#ovmsg{left:calc(8px + env(safe-area-inset-left));bottom:calc(8px + env(safe-area-inset-bottom));font-size:12px;padding:2px 8px;border-radius:6px}
+#ovmsg:empty{display:none}
+body.ovon{overflow:hidden}
 #camlive{left:8px;bottom:8px;font-size:12px;padding:2px 8px;border-radius:6px}
 .tabs{display:flex;gap:8px;border-bottom:1px solid var(--line);margin:-8px 0 24px;overflow-x:auto}
 .tabs button{background:none;border:0;border-bottom:3px solid transparent;border-radius:0;color:var(--ink2)}
@@ -186,9 +198,12 @@ pre{background:var(--sunk);border-radius:12px;padding:16px;height:min(400px,60vh
 <span id="camload" hidden>Loading picture…</span>
 <img id="cam" alt="Camera picture of the work area" hidden>
 <button id="camoff" hidden>Hide</button>
+<button id="camfull" hidden>Full view</button>
 <span id="camlive" hidden>live · 1 picture/s</span>
 </div>
 <p id="cammsg" class="note">Off by default; no pictures while hidden.</p>
+<div id="camset" hidden><div id="camres" class="seg" role="group" aria-label="Camera resolution"></div>
+<p class="note">Resolution. 640×480 is what the Makera app expects.</p></div>
 </section>
 
 <section class="card wide" aria-label="More">
@@ -257,6 +272,11 @@ install; never during a job. The board restarts after an install.</p>
 <p class="note">Newest last; updates every 2 s while open. Client addresses are masked.</p>
 </details>
 </main>
+<div id="ov" role="dialog" aria-modal="true" aria-label="Camera, full view" hidden>
+<img id="ovimg" alt="Camera picture of the work area, full resolution">
+<button id="ovx" aria-label="Close full view">✕</button>
+<span id="ovmsg"></span>
+</div>
 <script>
 const $ = id => document.getElementById(id);
 const fin = v => typeof v === 'number' && isFinite(v);
@@ -307,6 +327,9 @@ function spindle(S) {
 }
 
 function render(st) {
+  const c = st.camera;
+  $('camset').hidden = !c;
+  if (c) html('camres', arr(c.options).map(o => `<button aria-pressed="${o === c.res}" data-r="${o}">${o.replace('x', '×')}</button>`).join(''));
   const m = st.machine || {}, j = st.job || {}, l = st.lpc || {}, sd = st.sd || {}, w = st.wifi || {}, y = st.system || {};
   const fresh = !!m.fresh && !l.silent, word = String(m.state || '').split(':')[0], H = fresh ? arr(m.H)[0] : 0;
   let [label, cls, hint] = l.silent ? ['No controller', 'bad', 'The motion controller does not answer.'] :
@@ -577,25 +600,35 @@ $('logend').onclick = () => { logel.scrollTop = logel.scrollHeight; $('logend').
 if (store('z1log') === '1') logp.open = true;
 document.addEventListener('visibilitychange', logPoll);
 
-// Camera: about one picture a second while switched on and the tab is visible.
-let camOn = false, camGen = 0, camRunning = 0;
+// Camera: about one picture a second while switched on and the tab is visible;
+// in the full view as fast as they come. One request at a time.
+let camOn = false, camGen = 0, camRunning = 0, ovGen = 0, ovBack = null;
+const ovOn = () => !$('ov').hidden;
+// The next picture into img, swapped once decoded (no blank frame); false: gone stale meanwhile.
+async function snap(img, live) {
+  const r = await fetch('/api/snapshot', {signal: timeout(5000)});
+  if (r.status === 404) throw Object.assign(said('This board has no camera.'), {none: 1});
+  if (!r.ok) throw said((await r.text()).trim() || 'error ' + r.status);
+  const url = URL.createObjectURL(await r.blob()), old = img.src;
+  if (!live()) { URL.revokeObjectURL(url); return false; }
+  await Promise.race([new Promise(ok => { img.onload = img.onerror = ok; img.src = url; }), wait(3000)]);
+  if (old && old !== $('cam').src) URL.revokeObjectURL(old);  // the full view starts with the card's picture
+  return true;
+}
 async function camLoop(gen) {
   camRunning = gen;
-  while (camOn && gen === camGen && !document.hidden) {
+  const live = () => camOn && gen === camGen && !document.hidden && !ovOn();
+  while (live()) {
     const t0 = Date.now();
     try {
-      const r = await fetch('/api/snapshot', {signal: timeout(5000)});
-      if (r.status === 404) { camToggle(false); set('cammsg', 'This board has no camera.'); break; }
-      if (!r.ok) throw said((await r.text()).trim() || 'error ' + r.status);
-      const url = URL.createObjectURL(await r.blob()), img = $('cam'), old = img.src;
-      if (gen !== camGen || !camOn) { URL.revokeObjectURL(url); break; }
-      await Promise.race([new Promise(ok => { img.onload = img.onerror = ok; img.src = url; }), wait(3000)]);  // swap once decoded: no blank frame
+      const img = $('cam');
+      if (!await snap(img, live)) break;
       img.hidden = false;
       img.className = '';
       $('camload').hidden = true;
-      if (old) URL.revokeObjectURL(old);
       set('cammsg', 'Updated ' + clock());
     } catch (e) {
+      if (e.none) { camToggle(false); set('cammsg', e.message); break; }
       $('cam').className = 'old';
       set('camload', 'No picture yet');
       $('camload').hidden = !$('cam').hidden;
@@ -605,10 +638,25 @@ async function camLoop(gen) {
   }
   if (camRunning === gen) camRunning = 0;
 }
+async function ovLoop(gen) {
+  const live = () => gen === ovGen && ovOn() && !document.hidden;
+  while (live()) {
+    try {
+      if (!await snap($('ovimg'), live)) break;
+      set('ovmsg', '');
+      await wait(150);  // port 80 has one server task: leave room for status and Stop
+    } catch (e) {
+      if (!live()) break;
+      if (e.none) { set('ovmsg', e.message); break; }
+      set('ovmsg', 'No picture: ' + why(e) + '. Retrying…');
+      await wait(500);
+    }
+  }
+}
 function camToggle(on) {
   camOn = on;
   $('camon').hidden = on;
-  $('camoff').hidden = $('camlive').hidden = !on;
+  $('camoff').hidden = $('camfull').hidden = $('camlive').hidden = !on;
   const img = $('cam');
   img.hidden = true;
   if (img.src) { URL.revokeObjectURL(img.src); img.removeAttribute('src'); }
@@ -617,9 +665,65 @@ function camToggle(on) {
   set('cammsg', on ? 'Loading picture…' : 'Camera off.');
   camLoop(++camGen);
 }
+function ovShow(on) {
+  if (on === ovOn()) return;
+  const img = $('ovimg');
+  $('ov').hidden = !on;
+  document.body.classList.toggle('ovon', on);
+  ovGen++;
+  if (on) {
+    ovBack = document.activeElement;
+    if ($('cam').src) img.src = $('cam').src;
+    set('ovmsg', '');
+    $('ovx').focus();
+    ovLoop(ovGen);
+  } else {
+    if (img.src && img.src !== $('cam').src) URL.revokeObjectURL(img.src);
+    img.removeAttribute('src');
+    if (ovBack) ovBack.focus();
+    if (camOn) camLoop(++camGen);
+  }
+}
+// Within the picture itself (object-fit: contain leaves bars around it).
+function inPic(e, i) {
+  const b = i.getBoundingClientRect(), k = Math.min(b.width / i.naturalWidth, b.height / i.naturalHeight);
+  return Math.abs(e.clientX - b.left - b.width / 2) * 2 <= i.naturalWidth * k && Math.abs(e.clientY - b.top - b.height / 2) * 2 <= i.naturalHeight * k;
+}
 $('camon').onclick = () => camToggle(true);
 $('camoff').onclick = () => { camToggle(false); $('camon').focus(); };
-document.addEventListener('visibilitychange', () => { if (camOn && !document.hidden && !camRunning) camLoop(++camGen); });
+$('cam').onclick = $('camfull').onclick = () => ovShow(true);
+$('ovx').onclick = () => ovShow(false);
+$('ov').onclick = e => { if (e.target === $('ov') || e.target === $('ovimg') && !inPic(e, $('ovimg'))) ovShow(false); };
+document.addEventListener('keydown', e => {
+  if (!ovOn()) return;
+  if (e.key === 'Escape') ovShow(false);
+  else if (e.key === 'Tab') { e.preventDefault(); $('ovx').focus(); }  // the dialog's only control
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  if (ovOn()) ovLoop(++ovGen);
+  else if (camOn && !camRunning) camLoop(++camGen);
+});
+let camResBusy = false;
+$('camres').onclick = async e => {
+  const b = e.target.closest('button');
+  if (!b || b.getAttribute('aria-pressed') === 'true' || camResBusy) return;
+  camResBusy = true;
+  const r0 = b.dataset.r, label = b.textContent;
+  set('cammsg', 'Switching to ' + label + '…');
+  try {
+    const r = await fetch('/api/camera', {method: 'POST', headers: {'X-Requested-With': 'z1-webui'}, body: b.dataset.r, signal: timeout(4000), cache: 'no-store'});
+    const t = (await r.text().catch(() => '')).trim();
+    if (!r.ok) throw said(t || 'error ' + r.status);
+    for (const x of $('camres').children) x.setAttribute('aria-pressed', x.dataset.r === r0);
+    shown.camres = $('camres').innerHTML;
+    set('cammsg', label + (t.includes('not saved') ? ', but not saved for the next boot.' : ' set.'));
+  } catch (e) {
+    set('cammsg', 'Resolution not changed: ' + why(e) + '.');
+  } finally {
+    camResBusy = false;
+  }
+};
 
 render({});
 set('chip', 'Connecting…');

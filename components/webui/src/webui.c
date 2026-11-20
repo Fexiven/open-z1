@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "camera.h"
+#include "camera_res.h"
 #include "cfg.h"
 #include "ctrl_server.h"
 #include "esp_app_desc.h"
@@ -98,6 +99,7 @@ static size_t status_json(void)
         .sd_mounted = storage_mounted(),
         .sd_used_mb = used,
         .sd_total_mb = total,
+        .cam_res = camera_res(),
         .wifi_connected = wifi.connected,
         .rssi = wifi.connected ? wifi.rssi : 0,
         .ip = wifi.connected ? wifi.ip : "",
@@ -319,6 +321,27 @@ static esp_err_t snapshot_get(httpd_req_t *req)
     return err;
 }
 
+// The camera resolution: the body is one of camera_res_names. Applied at once
+// (between two frames) and kept for the next boots.
+static esp_err_t camera_post(httpd_req_t *req)
+{
+    if (!from_our_page(req)) {
+        return refused(req);
+    }
+    char body[16];
+    int n = req->content_len < sizeof(body) ? httpd_req_recv(req, body, req->content_len) : -1;
+    int res = n >= 0 && (size_t)n == req->content_len ? camera_res_parse(body, (size_t)n) : -1;
+    if (res < 0) {
+        return reply(req, "400 Bad Request", "unknown resolution\n");
+    }
+    esp_err_t err = camera_set_res(res);
+    if (err == ESP_ERR_NOT_SUPPORTED) {
+        return reply(req, "404 Not Found", "no camera on this board\n");
+    }
+    ESP_LOGI(TAG, "camera resolution %s from the web UI", camera_res_names[res]);
+    return reply(req, "200 OK", err == ESP_OK ? "resolution set\n" : "resolution set, but not saved for the next boot\n");
+}
+
 // ---- the setup hotspot's page (wifi_mgr.h): scan and join through the
 // app's `wlan` path (wifi_mgr_app_command: saved only once it gives an IP),
 // run in wifi_mgr's task; the page polls /setup/result.
@@ -458,6 +481,7 @@ esp_err_t webui_start(bool (*lpc_silent)(void))
         {.uri = "/api/stop", .method = HTTP_POST, .handler = stop_post},
         {.uri = "/api/pause", .method = HTTP_POST, .handler = pause_post},
         {.uri = "/api/snapshot", .method = HTTP_GET, .handler = snapshot_get},
+        {.uri = "/api/camera", .method = HTTP_POST, .handler = camera_post},
         {.uri = "/setup/scan", .method = HTTP_POST, .handler = setup_scan_post},
         {.uri = "/setup/join", .method = HTTP_POST, .handler = setup_join_post},
         {.uri = "/setup/result", .method = HTTP_GET, .handler = setup_result_get},

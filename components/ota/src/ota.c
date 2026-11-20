@@ -286,7 +286,7 @@ esp_err_t ota_start(ota_busy_fn busy)
     cfg.send_wait_timeout = 2;
     cfg.stack_size = 8192;  // esp_ota_end verifies the RSA-3072 signature in this task
     cfg.lru_purge_enable = true;  // a dead client never blocks the next update
-    cfg.max_uri_handlers = 14;    // /ota and the web UI's (12)
+    cfg.max_uri_handlers = 14;    // /ota (2) and the web UI's (11)
     esp_err_t err = httpd_start(&h, &cfg);
     if (err != ESP_OK) {
         return err;

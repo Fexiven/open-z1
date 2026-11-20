@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "camera_res.h"
 #include "machine.h"
 
 typedef struct {
@@ -161,6 +162,16 @@ size_t webui_status_json(const webui_status_t *s, char *out, size_t cap)
     put_u32(&b, "used_mb", s->sd_used_mb);
     put_u32(&b, "total_mb", s->sd_total_mb);
     close_with(&b, '}');
+    if (s->cam_res >= 0 && s->cam_res < CAMERA_RES_COUNT) {
+        put(&b, ",\"camera\":{\"res\":\"%s\",\"options\":[", camera_res_names[s->cam_res]);
+        for (int i = 0; i < CAMERA_RES_COUNT; i++) {
+            put(&b, "\"%s\",", camera_res_names[i]);
+        }
+        close_with(&b, ']');
+        put(&b, "}");
+    } else {
+        put(&b, ",\"camera\":null");
+    }
     put(&b, ",\"wifi\":{");
     put_bool(&b, "connected", s->wifi_connected);
     put(&b, "\"rssi\":%d,", s->rssi);
