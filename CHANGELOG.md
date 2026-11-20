@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] – 2026-11-20
+
+### Added
+
+- Web UI firmware updates for both chips, fetched by the board from GitHub
+  when Check is pressed: open-z1 for the Mainboard (Stable or Beta, signed,
+  with rollback) and the motion controller's firmware (Makera's
+  `lpc1768.bin` or the Carvera Community firmware's Z1 image, Stable or
+  Beta). Each row also takes a file upload and refuses the other chip's
+  files.
+- Camera resolution selector (640×480, 1280×720, 1600×1200) and a full view
+  in the web UI; the stream holds frames back adaptively while the app
+  link is busy.
+
+### Changed
+
+- `flash.py` is reduced to install and restore: install backs up the full
+  flash, copies stock's settings if stock is found and writes the firmware.
+- The project is named open-z1: backups now go to `~/open-z1-backups`
+  (before: `~/openz1-backups`; a stock backup made earlier stays there).
+- The motion-controller update also takes a bare LPC1768 image.
+
 ## [1.0.0] – 2026-11-19
 
 First public release. Summary of what the firmware does:

@@ -7,7 +7,7 @@ CONFIG_ESP_PHY_INIT_DATA_IN_PARTITION=n
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 CONFIG_APP_PROJECT_VER_FROM_CONFIG=y
-CONFIG_APP_PROJECT_VER="1.0.0"
+CONFIG_APP_PROJECT_VER="1.1.0"
 # No build date or paths in the image: every build of a commit gives the same
 # images, so a release can be checked against tools/build.sh.
 CONFIG_APP_REPRODUCIBLE_BUILD=y
