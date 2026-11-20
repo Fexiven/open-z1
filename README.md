@@ -30,9 +30,8 @@ folder:
 1. `pip install esptool` (Python 3.10+)
 2. Hold the BOOT button while switching the machine on, with the Z1 connected
    over USB.
-3. `python flash.py install`. It checks the board, backs up the full flash
-   (`--backup-dir`, default: `~/open-z1-backups`) and installs. Interrupted:
-   run it again.
+3. `python flash.py install`. It backs up the full flash to
+   `~/open-z1-backups`, then installs. Interrupted: run it again.
 4. Switch the machine off and on again.
 
 ## Updates
