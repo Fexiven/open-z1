@@ -1,0 +1,12 @@
+# Makera Z1 (16 MB flash). The partition table sits at 0x10000
+# (CONFIG_PARTITION_TABLE_OFFSET), leaving the bootloader up to 64 KB.
+# NVS is 24 KB: the stock 16 KB, moved here by flash.py, plus
+# 8 KB of free pages. No phy_init partition (CONFIG_ESP_PHY_INIT_DATA_IN_PARTITION=n).
+# App slots 4 MB each (layout 3); storage is the rest of the flash (8000 KB).
+# Name,   Type, SubType,  Offset,   Size
+nvs,      data, nvs,      0x11000,  0x6000
+otadata,  data, ota,      0x17000,  0x2000
+ota_0,    app,  ota_0,    0x20000,  0x400000
+ota_1,    app,  ota_1,    0x420000, 0x400000
+coredump, data, coredump, 0x820000, 0x10000
+storage,  data, littlefs, 0x830000, 0x7d0000

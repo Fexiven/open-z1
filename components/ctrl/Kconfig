@@ -1,0 +1,20 @@
+menu "Z1 app control server (TCP)"
+
+    config Z1_CTRL_MAX_CLIENTS
+        int "Maximum simultaneous clients"
+        range 1 8
+        default 4
+        help
+            Stock allows 4; every client may send every command.
+
+    config Z1_APP_ESP_VERSION
+        string "Mainboard part of the version the official app sees"
+        default "0.1.13"
+        help
+            The app's `version` gets "version = <LPC FIRM_VER>.<this>", shaped
+            like stock's "version = 1.1.3.0.1.13" (as captured; current
+            Makera release firmware-z1/1.1.3.0113), so the app's update page
+            sees a current stock version. Our own version is in the boot log,
+            the console `version` and GET /ota.
+
+endmenu

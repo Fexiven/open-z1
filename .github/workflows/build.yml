@@ -1,0 +1,29 @@
+# Builds the Z1 firmware.
+#
+# The build is unsigned (tools/build.sh, here in the ESP-IDF container);
+# official releases are signed by the maintainer, not in CI.
+name: build
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  firmware:
+    runs-on: ubuntu-latest
+    container:
+      image: docker.io/espressif/idf:v6.1
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Build
+        run: |
+          . "$IDF_PATH/export.sh" >/dev/null
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          tools/build.sh

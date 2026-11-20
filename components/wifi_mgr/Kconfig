@@ -1,0 +1,13 @@
+menu "Z1 Wi-Fi setup hotspot"
+
+config Z1_WIFI_SETUP_WINDOW_S
+    int "Seconds after boot the setup hotspot may run"
+    default 600
+    help
+        Default: 10 minutes. Shorter only in a test build.
+
+config Z1_WIFI_SETUP_UNREACHABLE_S
+    int "Seconds without an IP from the saved network before the hotspot opens"
+    default 180
+
+endmenu

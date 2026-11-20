@@ -1,0 +1,41 @@
+# On a v* tag: builds the z1 release images UNSIGNED and uploads them as the
+# artifact open-z1-<version>-z1-unsigned. The maintainer signs them locally;
+# the signing key is never on GitHub, and this workflow uses no secrets.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  z1-unsigned:
+    runs-on: ubuntu-latest
+    container:
+      image: docker.io/espressif/idf:v6.1
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Build z1 unsigned
+        id: build
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          . "$IDF_PATH/export.sh" >/dev/null
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          version="${TAG#v}"
+          tools/build.sh --release "$version" "$RUNNER_TEMP/out"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: open-z1-${{ steps.build.outputs.version }}-z1-unsigned
+          path: ${{ runner.temp }}/out/open-z1-${{ steps.build.outputs.version }}-z1-unsigned/
+          if-no-files-found: error

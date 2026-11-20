@@ -1,0 +1,66 @@
+CONFIG_IDF_TARGET="esp32s3"
+CONFIG_PARTITION_TABLE_CUSTOM=y
+# Table at 0x10000 so the bootloader may grow to 64 KB; see partitions-16mb.csv.
+CONFIG_PARTITION_TABLE_OFFSET=0x10000
+# No phy_init partition in the table.
+CONFIG_ESP_PHY_INIT_DATA_IN_PARTITION=n
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+CONFIG_APP_PROJECT_VER_FROM_CONFIG=y
+CONFIG_APP_PROJECT_VER="1.0.0"
+# No build date or paths in the image: every build of a commit gives the same
+# images, so a release can be checked against tools/build.sh.
+CONFIG_APP_REPRODUCIBLE_BUILD=y
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+# The bootloader cannot be updated over the air, so rollback must be in it from the first flash.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+# 802.11k/v so a mesh can steer us to a better AP.
+CONFIG_ESP_WIFI_11KV_SUPPORT=y
+# Camera stream on :82 is a WebSocket (the official app's ws_video).
+CONFIG_HTTPD_WS_SUPPORT=y
+# About 15 used: ctrl 5 (listen, 4 clients; its wake-up is an eventfd),
+# discovery 1, camera httpd 5, OTA httpd 6 (4 open, listen, control): 17.
+CONFIG_LWIP_MAX_SOCKETS=20
+# FatFs itself refuses to delete or rename a file that is open (a download,
+# a job), and reports it as an error instead of corrupting the card.
+CONFIG_FATFS_FS_LOCK=8
+# OTA installs only signed images. App-only check, done by the running app in
+# esp_ota_end against the key that signed the running app: no hardware secure
+# boot, so nothing is written to eFuses. The bootloader does not check
+# signatures (that option exists only for the ESP32's V1 scheme). The build
+# itself is unsigned (the images are secure-padded); official releases are
+# signed afterwards by the maintainer.
+CONFIG_SECURE_SIGNED_APPS_NO_SECURE_BOOT=y
+CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME=y
+CONFIG_SECURE_SIGNED_ON_UPDATE_NO_SECURE_BOOT=y
+CONFIG_SECURE_BOOT_BUILD_SIGNED_BINARIES=n
+# No PSRAM memory test at boot (about 0.7 s on 8 MB): the LPC's config load
+# window after its own boot is about 2 s, and the link must be up in time.
+CONFIG_SPIRAM_MEMTEST=n
+# A stuck LPC link task restarts the board (components/health). Playback and
+# the app server are not watched: they wait on the SD card.
+CONFIG_ESP_TASK_WDT_EN=y
+CONFIG_ESP_TASK_WDT_INIT=y
+CONFIG_ESP_TASK_WDT_PANIC=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
+# CPU load per core for the web UI (components/health): FreeRTOS's run-time
+# counters, on the esp_timer clock (the default): one timer read per context switch.
+CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
+
+# Makera Z1 Mainboard: 16 MB flash, DIO 80 MHz, octal PSRAM (GPIO 33-37), as
+# stock. Boot on without PSRAM, so a bad guess still leaves a console. Board
+# pins are the defaults in components/board/Kconfig.
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions-16mb.csv"
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_IGNORE_NOTFOUND=y
+# The console stays on the USB-Serial/JTAG port (GPIO 19/20): it is reachable
+# from the Z1's USB socket without opening the machine. Stock uses that USB for
+# a TinyUSB bridge to the LPC instead (not built).
+# No PHY calibration data in NVS: the firmware must not write into the stock
+# NVS beyond what it saves itself (stock keeps its own data there).
+CONFIG_ESP_PHY_CALIBRATION_AND_DATA_STORAGE=n

@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Makera Z1</title>
+<style>
+:root{--bg:#f3f4f6;--card:#fff;--sunk:#f0f2f5;--ink:#15171c;--ink2:#545b67;--line:#e1e4e9;--sh:0 1px 3px rgba(16,24,40,.08);
+--idle-bg:#eceef2;--idle:#343a45;--run-bg:#e3edff;--run:#1a4fb0;--runbar:#2563eb;--hold-bg:#fff1d1;--hold:#7a4700;--holdbar:#d18a00;
+--bad-bg:#fde6e5;--bad:#a3171b;--ok:#14833b;--stop:#c4211d;--stop-h:#a51b18;--focus:#2563eb}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1014;--card:#171a20;--sunk:#1f232a;--ink:#e9ebef;--ink2:#a4abb6;--line:#2a2f38;--sh:0 1px 2px rgba(0,0,0,.4);
+--idle-bg:#262b33;--idle:#d5d9e0;--run-bg:#16294b;--run:#a9c7ff;--runbar:#4f8df7;--hold-bg:#3a2a08;--hold:#ffd27d;--holdbar:#e0a321;
+--bad-bg:#44191a;--bad:#ffb1ab;--ok:#4ccf7a;--stop-h:#dc3a33;--focus:#7aa7ff}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+header,#lost{max-width:1200px;margin:0 auto;padding:16px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{font-size:20px;font-weight:700;margin:0;white-space:nowrap}
+.brand small{font-size:13px;font-weight:500;color:var(--ink2);margin-left:8px}
+@media (max-width:479px){.brand small{display:none}}
+.conn{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink2);min-width:0}
+#host{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--ink2);flex:none}
+.dot.ok{background:var(--ok)}.dot.bad{background:var(--stop)}
+#lost{padding-top:0;position:sticky;top:0;z-index:2}
+#lost div{background:var(--bad-bg);color:var(--bad);border-radius:12px;padding:12px 16px;font-weight:600}
+main{max-width:1200px;margin:0 auto;padding:0 16px 32px;display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+main.stale .fade{opacity:.55}
+@media (min-width:720px){main{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:1040px){main{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:clamp(16px,4vw,24px);box-shadow:var(--sh);min-width:0;transition:opacity .2s}
+.wide{grid-column:1/-1}
+h2{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink2);margin:0 0 16px}
+h3{font-size:16px;margin:0 0 8px}
+.note{color:var(--ink2);font-size:14px;margin:8px 0 0}
+.hero{display:grid;gap:24px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:720px){.hero{grid-template-columns:minmax(0,1fr) 240px;align-items:start}}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:999px;font-size:24px;font-weight:700;line-height:1.2;background:var(--idle-bg);color:var(--idle)}
+.chip::before{content:"";width:12px;height:12px;border-radius:50%;background:currentColor}
+.run{background:var(--run-bg);color:var(--run)}.hold{background:var(--hold-bg);color:var(--hold)}.bad{background:var(--bad-bg);color:var(--bad)}
+#hint{margin:8px 0 0;color:var(--ink2);min-height:1.5em}
+#hint.bad{background:none;font-weight:600}
+.fname{font-size:18px;font-weight:600;overflow-wrap:anywhere;margin:4px 0 0}
+.bar{height:16px;background:var(--sunk);border-radius:8px;overflow:hidden;margin:16px 0 8px}
+.bar div{height:100%;width:0;background:var(--runbar);border-radius:8px;transition:width .4s}
+.bar.hold div{background:var(--holdbar)}
+.nums{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 24px}
+.pct{font-size:40px;font-weight:700;line-height:1}
+@media (max-width:479px){.pct{flex-basis:100%}}
+.kv b{display:block;font-size:18px}.kv span{font-size:13px;color:var(--ink2)}
+.act{display:grid;gap:16px;grid-template-columns:2fr 3fr}
+@media (min-width:720px){.act{grid-template-columns:1fr}}
+button,.btn{font:inherit;font-weight:600;min-height:44px;padding:8px 16px;border-radius:12px;border:1px solid var(--line);background:var(--sunk);color:var(--ink);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+button:hover,.btn:hover{border-color:var(--ink2)}
+button:disabled{opacity:.5;cursor:default}
+.big{min-height:64px;font-size:20px;width:100%}
+#stop{background:var(--stop);border-color:var(--stop);color:#fff;flex-direction:column;line-height:1.2;padding:8px}
+#stop:hover{background:var(--stop-h)}
+#stop small{font-size:12px;font-weight:500}
+#msg{grid-column:1/-1;margin:0;min-height:24px;font-size:14px;color:var(--ink2);border-radius:8px}
+#msg.ok,#msg.bad,#msg.busy{padding:8px 12px;font-weight:600}
+#msg.ok{background:var(--idle-bg);color:var(--ink)}#msg.busy{background:var(--run-bg);color:var(--run)}
+button.sending{opacity:.75;cursor:progress}
+.hv{font-size:32px;font-weight:700;line-height:1.1}
+.hv small,.v small{font-size:15px;font-weight:500;color:var(--ink2);margin-left:4px}
+.rows{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px 16px;margin:16px 0 0}
+.rows dt{color:var(--ink2);font-size:14px}
+.rows dd{margin:0;text-align:right;font-weight:500;overflow-wrap:anywhere}
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.pill{font-size:13px;padding:4px 12px;border-radius:999px;border:1px solid var(--line);color:var(--ink2)}
+.pill.on{background:var(--ink);color:var(--card);border-color:var(--ink)}
+.axes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.ax,.chart{background:var(--sunk);border-radius:12px;padding:12px;min-width:0}
+.ax b{display:block;font-size:13px;color:var(--ink2)}
+.ax div{font-size:clamp(15px,4.4vw,22px);font-weight:700;line-height:1.2;overflow-wrap:anywhere}
+.ax span{font-size:13px;color:var(--ink2)}
+.tile{position:relative;aspect-ratio:4/3;background:var(--sunk);border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:opacity .2s}
+.tile img.old{opacity:.5}
+#camload{color:var(--ink2);font-size:14px}
+#camoff,#camlive{position:absolute;background:rgba(0,0,0,.6);color:#fff;border:0}
+#camoff{top:8px;right:8px}
+#camlive{left:8px;bottom:8px;font-size:12px;padding:2px 8px;border-radius:6px}
+.tabs{display:flex;gap:8px;border-bottom:1px solid var(--line);margin:-8px 0 24px;overflow-x:auto}
+.tabs button{background:none;border:0;border-bottom:3px solid transparent;border-radius:0;color:var(--ink2)}
+.tabs [aria-selected=true]{color:var(--ink);border-bottom-color:var(--ink)}
+.grid{display:grid;gap:16px 32px;grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+.chart{padding:12px 16px}
+.chart p{margin:0;font-size:13px;color:var(--ink2)}
+.v{font-size:24px;font-weight:700}
+.chart svg{display:block;width:100%;height:48px;margin:8px 0 4px}
+.chart .a{fill:var(--ink);opacity:.1}
+.chart .p{fill:none;stroke:var(--ink);stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.mm{display:flex;justify-content:space-between;font-size:13px;color:var(--ink2)}
+.sys{grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))}
+.sys .rows{margin:0}
+.meter{display:inline-block;width:64px;height:8px;background:var(--sunk);border-radius:4px;overflow:hidden;margin-left:8px}
+.meter i{display:block;height:100%;background:var(--ink2)}
+.sig{display:inline-flex;align-items:flex-end;gap:2px;height:16px;margin-right:8px}
+.sig i{width:4px;background:var(--line);border-radius:1px}
+.sig i.on{background:var(--ink)}
+.badge{font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;background:var(--idle-bg);margin-left:8px}
+.maint{grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+input[type=file]{font:inherit;max-width:100%;min-height:44px}
+::file-selector-button{font:inherit;font-weight:600;min-height:44px;padding:8px 16px;margin-right:8px;border-radius:12px;border:1px solid var(--line);background:var(--sunk);color:var(--ink)}
+form{display:flex;flex-wrap:wrap;gap:8px}
+details>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;min-height:44px;margin:-8px 0}
+details>summary::-webkit-details-marker{display:none}
+details>summary::before{content:"";width:8px;height:8px;border:solid var(--ink2);border-width:0 2px 2px 0;transform:rotate(-45deg);transition:transform .15s;flex:none}
+details[open]>summary::before{transform:rotate(45deg)}
+details>summary h2{margin:0}
+#logst{margin-left:auto;font-size:13px;color:var(--ink2);text-align:right}
+.logbox{position:relative}
+pre{background:var(--sunk);border-radius:12px;padding:16px;height:min(400px,60vh);overflow:auto;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all;margin:16px 0 0;overscroll-behavior:contain}
+#logend{position:absolute;right:12px;bottom:12px;min-height:36px;font-size:13px;box-shadow:var(--sh)}
+</style>
+</head>
+<body>
+<header>
+<p class="brand">Makera Z1<small>open firmware</small></p>
+<div class="conn"><i class="dot" id="dot"></i><span id="host"></span></div>
+</header>
+<div id="lost" role="alert" hidden><div id="losttxt"></div></div>
+<main id="main">
+
+<section class="card wide" aria-label="Machine">
+<div class="hero">
+<div>
+<div id="chip" class="chip" role="status" aria-live="polite">Connecting…</div>
+<p id="hint"></p>
+<div style="margin-top:24px">
+<p class="note" id="jobhead">No job running</p>
+<p class="fname" id="fname" hidden></p>
+<div id="jobrun" hidden>
+<div class="bar" id="bar" role="progressbar" aria-label="Job progress" aria-valuemin="0" aria-valuemax="100"><div id="barfill"></div></div>
+<div class="nums">
+<span class="pct" id="pct">–</span>
+<span class="kv"><b id="elapsed">–</b><span>elapsed</span></span>
+<span class="kv"><b id="remain">–</b><span>remaining</span></span>
+<span class="kv"><b id="line">–</b><span>line</span></span>
+</div>
+</div>
+</div>
+</div>
+<div class="act">
+<button class="big" id="pause">Pause</button>
+<button class="big" id="stop">Stop<small>not an emergency stop</small></button>
+<p id="msg" aria-live="polite"></p>
+</div>
+</div>
+</section>
+
+<section class="card fade">
+<h2>Spindle</h2>
+<div class="hv"><span id="rpm">–</span><small>rpm</small></div>
+<dl class="rows">
+<dt>Target</dt><dd id="target">–</dd>
+<dt>Override</dt><dd id="ovr">–</dd>
+<dt id="tsp_t" hidden>Spindle temp.</dt><dd id="tsp" hidden></dd>
+<dt id="tpw_t" hidden>Power board temp.</dt><dd id="tpw" hidden></dd>
+<dt>Tool</dt><dd id="tool">–</dd>
+<dt id="atc_t" hidden>Tool change</dt><dd id="atc" hidden></dd>
+<dt id="laser_t" hidden>Laser</dt><dd id="laser" hidden></dd>
+</dl>
+<div class="pills" id="pills"></div>
+</section>
+
+<section class="card fade">
+<h2>Position <span id="unit"></span></h2>
+<div class="axes" id="axes"></div>
+<dl class="rows">
+<dt>Feed</dt><dd id="feed">–</dd>
+<dt>Feed override</dt><dd id="fovr">–</dd>
+<dt id="aa_t" hidden>A axis</dt><dd id="aa" hidden></dd>
+</dl>
+<p class="note">Large: work, small: machine coordinates.</p>
+</section>
+
+<section class="card">
+<h2>Camera</h2>
+<div class="tile">
+<button id="camon">Show camera</button>
+<span id="camload" hidden>Loading picture…</span>
+<img id="cam" alt="Camera picture of the work area" hidden>
+<button id="camoff" hidden>Hide</button>
+<span id="camlive" hidden>live · 1 picture/s</span>
+</div>
+<p id="cammsg" class="note">Off by default; no pictures while hidden.</p>
+</section>
+
+<section class="card wide" aria-label="More">
+<div class="tabs" role="tablist">
+<button role="tab" id="t_trends" aria-controls="p_trends">Trends</button>
+<button role="tab" id="t_system" aria-controls="p_system">System</button>
+<button role="tab" id="t_maint" aria-controls="p_maint">Maintenance</button>
+</div>
+
+<div role="tabpanel" id="p_trends" aria-labelledby="t_trends">
+<div class="grid" id="charts"></div>
+<p class="note" style="margin-top:16px">Last 5 minutes, kept in this browser tab only while it is open.</p>
+</div>
+
+<div role="tabpanel" id="p_system" aria-labelledby="t_system" hidden>
+<div class="grid sys">
+<dl class="rows">
+<dt>Firmware</dt><dd id="ver">–</dd>
+<dt>Running from</dt><dd><span id="slot">–</span><span class="badge" id="slotst" hidden></span></dd>
+<dt>Other slot</dt><dd id="other">–</dd>
+<dt>Uptime</dt><dd id="uptime">–</dd>
+<dt>Last reset</dt><dd id="reset">–</dd>
+<dt>SD card</dt><dd id="sd">–</dd>
+<dt>Wi-Fi</dt><dd id="wifi">–</dd>
+</dl>
+<dl class="rows">
+<dt>CPU core 0</dt><dd id="cpu0">–</dd>
+<dt>CPU core 1</dt><dd id="cpu1">–</dd>
+<dt>Memory</dt><dd id="heap">–</dd>
+<dt>PSRAM</dt><dd id="psram">–</dd>
+<dt>Motion controller</dt><dd id="lpcv">–</dd>
+<dt>Controller config</dt><dd id="lpcc">–</dd>
+<dt>Status reports</dt><dd id="lpcr">–</dd>
+</dl>
+</div>
+</div>
+
+<div role="tabpanel" id="p_maint" aria-labelledby="t_maint" hidden>
+<div class="grid maint">
+<div>
+<h3>Firmware update</h3>
+<form id="up">
+<input type="file" id="file" accept=".bin" required aria-label="Firmware image (.bin)">
+<button id="upbtn">Upload and install</button>
+</form>
+<div class="bar" id="upbar" hidden><div id="upfill"></div></div>
+<p id="upmsg" aria-live="polite"></p>
+<p class="note">Only images signed with this firmware's key, for this board, and not older than the running one
+install; never during a job. The board restarts after an install.</p>
+</div>
+<div>
+<h3>Diagnostics</h3>
+<a class="btn" href="/api/diag" download="z1-diagnostics.txt">Download diagnostics</a>
+<p class="note">Status, versions and the recent log; no Wi-Fi name, password, serial number or client addresses.</p>
+</div>
+</div>
+</div>
+</section>
+
+<details class="card wide" id="logp">
+<summary><h2>Event log</h2><span id="logst">closed</span></summary>
+<div class="logbox">
+<pre id="log" tabindex="0" aria-label="Event log, newest last" aria-live="off"></pre>
+<button id="logend" hidden>↓ Latest</button>
+</div>
+<p class="note">Newest last; updates every 2 s while open. Client addresses are masked.</p>
+</details>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const fin = v => typeof v === 'number' && isFinite(v);
+const num = (v, d = 0) => fin(v) ? v.toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d}) : '–';
+const set = (id, t) => { const e = $(id); if (e.textContent !== t) e.textContent = t; };
+const shown = {}, html = (id, h) => { if (shown[id] !== h) $(id).innerHTML = shown[id] = h; };
+const show = (id, on) => { $(id).hidden = $(id + '_t').hidden = !on; };
+const arr = a => Array.isArray(a) ? a : [];
+const nums = s => typeof s === 'string' && s ? s.split(',').map(x => x.trim() ? +x : NaN) : [];
+const wait = ms => new Promise(ok => setTimeout(ok, ms));
+const timeout = ms => { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal; };
+let uploading = false, fails = 0, lastOk = 0;
+// An error to show as is (the board's own words); anything else: unreachable.
+const said = t => Object.assign(new Error(t), {said: 1});
+const why = e => e && e.said ? e.message : 'the board is not reachable';
+const store = (k, v) => { try { return v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v); } catch (e) { return null; } };
+
+function dur(s) {
+  if (!fin(s) || s < 0) return '–';
+  s = Math.round(s);
+  const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
+  return h >= 24 ? Math.floor(h / 24) + ' d ' + h % 24 + ' h' : h ? h + ' h ' + m + ' min' : m ? m + ' min ' + s % 60 + ' s' : s + ' s';
+}
+
+// Kernel.h HALT_REASON and ATC_STATE.
+const HALT = {1: 'Halted by hand', 2: 'Homing failed', 3: 'Probing failed', 4: 'Calibration failed',
+  5: 'Tool changer homing failed', 6: 'Invalid tool', 7: 'No tool loaded', 8: 'Tool already loaded',
+  9: 'Spindle overheated', 10: 'Soft limit reached', 11: 'Cover open', 12: 'Probe invalid', 13: 'Emergency stop pressed',
+  14: 'Power board overheated', 15: 'Machine not homed', 21: 'Hard limit hit', 22: 'Motor error on X',
+  23: 'Motor error on Y', 24: 'Motor error on Z', 25: 'Spindle stalled', 26: 'SD card error',
+  41: 'Spindle alarm: power cycle the machine'};
+const ATC = {1: 'dropping tool', 2: 'picking tool', 3: 'calibrating', 4: 'margin', 5: 'Z probe', 6: 'auto-leveling', 9: 'done'};
+// State word: label, colour, hint.
+const STATES = {Idle: ['Idle', '', 'Ready.'], Run: ['Running', 'run', 'Moving.'], Jog: ['Jogging', 'run', 'Moving.'],
+  Home: ['Homing', 'run', 'Finding the home position.'], Hold: ['Paused', 'hold', 'Feed hold. Resume from the Makera app.'],
+  Door: ['Door open', 'hold', 'Close the cover to continue.'], Alarm: ['Alarm', 'bad', 'Unlock or home the machine from the Makera app.'],
+  Halt: ['Halted', 'bad', ''], Sleep: ['Sleep', '', ''], Check: ['Check mode', '', 'G-code check, no motion.']};
+
+// The S field (Kernel.cpp get_query_string): rpm, target rpm, override, vacuum, then the
+// spindle and power board temperatures when the LPC has them, then blowing, bed clean,
+// a reserved 0 and static removal.
+function spindle(S) {
+  if (S.length < 4) return {};
+  const r = {rpm: S[0], target: S[1], ovr: S[2], vac: S[3]};
+  if (S.length >= 10) Object.assign(r, {tSp: S[4], tPw: S[5], blow: S[6], clean: S[7], elec: S[9]});
+  else if (S.length >= 8) Object.assign(r, {blow: S[4], clean: S[5], elec: S[7]});
+  return r;
+}
+
+function render(st) {
+  const m = st.machine || {}, j = st.job || {}, l = st.lpc || {}, sd = st.sd || {}, w = st.wifi || {}, y = st.system || {};
+  const fresh = !!m.fresh && !l.silent, word = String(m.state || '').split(':')[0], H = fresh ? arr(m.H)[0] : 0;
+  let [label, cls, hint] = l.silent ? ['No controller', 'bad', 'The motion controller does not answer.'] :
+    !m.fresh ? ['No status', '', 'No status from the motion controller yet.'] : STATES[word] || [word || 'Unknown', '', ''];
+  if (fin(H) && H > 0) { cls = 'bad'; hint = HALT[H] || 'Halt reason ' + H; if (word !== 'Alarm') label = 'Halted'; }
+  if (word === 'Run' && j.serving) hint = '';
+  set('chip', label);
+  $('chip').className = 'chip ' + cls;
+  set('hint', hint);
+  $('hint').className = cls === 'bad' ? 'bad' : '';
+
+  // Job: P is "played lines, percent, elapsed seconds".
+  const p = nums(j.progress), file = String(j.file || ''), name = file.split('/').pop();
+  set('jobhead', j.serving ? (word === 'Hold' ? 'Job paused' : 'Job running') : name ? 'Last job, not running' : 'No job running');
+  set('fname', name);
+  $('fname').hidden = !name;
+  $('fname').title = file;
+  $('fname').style.color = j.serving ? '' : 'var(--ink2)';
+  $('jobrun').hidden = !j.serving;
+  if (j.serving) {
+    const pct = fin(p[1]) ? Math.max(0, Math.min(100, p[1])) : null;
+    $('barfill').style.width = (pct || 0) + '%';
+    $('bar').className = 'bar' + (word === 'Hold' ? ' hold' : '');
+    $('bar').setAttribute('aria-valuenow', pct || 0);
+    set('pct', pct == null ? '–' : num(pct, pct % 1 ? 1 : 0) + ' %');
+    set('elapsed', dur(p[2]));
+    set('remain', pct >= 2 && pct < 100 && fin(p[2]) ? '≈ ' + dur(p[2] * (100 - pct) / pct) : '–');
+    set('line', num(p[0]));
+  }
+
+  // Spindle.
+  const sp = fresh ? spindle(arr(m.S)) : {};
+  set('rpm', num(sp.rpm));
+  set('target', fin(sp.target) ? num(sp.target) + ' rpm' : '–');
+  set('ovr', fin(sp.ovr) ? num(sp.ovr) + ' %' : '–');
+  show('tsp', fin(sp.tSp)); set('tsp', num(sp.tSp, 1) + ' °C');
+  show('tpw', fin(sp.tPw)); set('tpw', num(sp.tPw, 1) + ' °C');
+  const T = fresh ? arr(m.T) : [];  // active tool, offset, target tool (-1: none)
+  set('tool', fin(T[0]) ? 'T' + T[0] + (fin(T[1]) ? ', offset ' + num(T[1], 3) : '') + (fin(T[2]) && T[2] >= 0 ? ' → T' + T[2] : '') : '–');
+  const A = fresh ? arr(m.A)[0] : null;
+  show('atc', fin(A)); set('atc', ATC[A] || 'state ' + A);
+  const L = fresh && arr(m.L)[0] === 1 ? m.L : null;
+  show('laser', !!L);
+  set('laser', L ? (L[1] ? 'firing' : 'off') + (L[2] ? ' (test)' : '') + ', ' + num(L[3], 1) + ' %' : '');
+  html('pills', [['Vacuum', sp.vac], ['Air', sp.blow], ['Bed clean', sp.clean], ['Static removal', sp.elec]]
+    .filter(x => fin(x[1])).map(([n, v]) => '<span class="pill' + (v ? ' on">' + n + ' on' : '">' + n + ' off') + '</span>').join(''));
+
+  // Position.
+  const inch = fresh && arr(m.C)[2] === 1, wp = fresh ? nums(m.wpos) : [], mp = fresh ? nums(m.mpos) : [];
+  set('unit', fresh ? (inch ? '· in' : '· mm') : '');
+  html('axes', [0, 1, 2].map(i => '<div class="ax"><b>' + 'XYZ'[i] + '</b><div>' + num(wp[i], 3) + '</div><span>' + num(mp[i], 3) + '</span></div>').join(''));
+  show('aa', fin(wp[3])); set('aa', num(wp[3], 3) + '° (machine ' + num(mp[3], 3) + '°)');
+  const F = fresh ? arr(m.F) : [];
+  set('feed', fin(F[0]) ? num(F[0]) + (inch ? ' in/min' : ' mm/min') + (fin(F[1]) ? ' of ' + num(F[1]) : '') : '–');
+  set('fovr', fin(F[2]) ? num(F[2]) + ' %' : '–');
+
+  // System.
+  const ss = y.slot_state;
+  set('ver', y.version || '–');
+  set('slot', y.slot || '–');
+  set('slotst', ss === 'pending' ? 'pending: kept once healthy' : ss || '');
+  $('slotst').hidden = !ss;
+  $('slotst').className = 'badge' + (ss === 'pending' ? ' hold' : '');
+  set('other', y.other_slot ? y.other_slot + ': ' + (y.other_version || 'empty') : '–');
+  set('uptime', dur(y.uptime_s));
+  set('reset', y.reset_reason || '–');
+  set('sd', !sd.mounted ? 'not mounted' : fin(sd.total_mb) ? num(sd.used_mb) + ' of ' + num(sd.total_mb) + ' MiB used' : 'mounted');
+  const cpu = arr(y.cpu).map(c => fin(c) && c >= 0 ? c : null);
+  for (const i of [0, 1])
+    html('cpu' + i, cpu[i] == null ? '–' : cpu[i] + ' %<span class="meter"><i style="width:' + Math.min(100, cpu[i]) + '%"></i></span>');
+  const mem = (v, lo, mib) => fin(v) ? num(v / (mib ? 1048576 : 1024), mib) + (mib ? ' MiB' : ' KiB') + ' free' +
+    (fin(lo) ? ' (lowest ' + num(lo / (mib ? 1048576 : 1024), mib) + ')' : '') : '–';
+  set('heap', mem(y.heap_free, y.heap_min, 0));
+  set('psram', mem(y.psram_free, y.psram_min, 1));
+  const rssi = w.connected && fin(w.rssi) ? w.rssi : null;
+  if (rssi != null) {
+    const b = [-85, -75, -67, -55].filter(t => rssi >= t).length;
+    let s = '<span class="sig" aria-hidden="true">';
+    for (let i = 1; i <= 4; i++) s += '<i class="' + (i <= b ? 'on' : '') + '" style="height:' + i * 4 + 'px"></i>';
+    html('wifi', s + '</span>' + rssi + ' dBm');
+  } else set('wifi', w.connected ? 'connected' : 'not connected');
+  set('lpcv', l.silent ? 'not answering' : l.version || '–');
+  set('lpcc', l.config || '–');
+  set('lpcr', fin(l.status_hz) ? num(l.status_hz, 1) + ' per second' : '–');
+  const ip = w.connected && w.ip ? String(w.ip) : '';
+  set('host', (location.hostname || 'this board') + (ip && ip !== location.hostname ? ' · ' + ip : ''));
+
+  record({rpm: sp.rpm, feed: F[0], tSp: sp.tSp, tPw: sp.tPw, cpu0: cpu[0], cpu1: cpu[1], rssi});
+}
+
+// Mini charts of the last 5 minutes, from the 1 s polls: key, label, unit, decimals, fixed range.
+const SPAN = 300000, hist = [];
+const CHARTS = [['rpm', 'Spindle speed', 'rpm', 0], ['feed', 'Feed', '/min', 0], ['tSp', 'Spindle temperature', '°C', 1],
+  ['tPw', 'Power board temperature', '°C', 1], ['cpu0', 'CPU core 0', '%', 0, 0, 100], ['cpu1', 'CPU core 1', '%', 0, 0, 100],
+  ['rssi', 'Wi-Fi signal', 'dBm', 0]];
+$('charts').innerHTML = CHARTS.map(([k, label]) => '<div class="chart"><p>' + label + '</p><div class="v" id="c_' + k +
+  '">–</div><svg viewBox="0 0 300 48" preserveAspectRatio="none" aria-hidden="true"><path class="a" id="a_' + k +
+  '"/><path class="p" id="p_' + k + '"/></svg><div class="mm"><span id="n_' + k + '"></span><span id="x_' + k + '"></span></div></div>').join('');
+
+function record(v) {
+  const now = Date.now();
+  if (v) hist.push([now, v]);
+  while (hist.length && hist[0][0] < now - SPAN) hist.shift();
+  if ($('p_trends').hidden || !hist.length) return;
+  v = hist[hist.length - 1][1];
+  for (const [k, , unit, d, lo, hi] of CHARTS) {
+    const vals = hist.map(h => h[1][k]).filter(fin), fmt = x => num(x, d);
+    html('c_' + k, fin(v[k]) ? fmt(v[k]) + '<small>' + unit + '</small>' : '–');
+    const dmin = Math.min(...vals), dmax = Math.max(...vals);
+    let min = lo ?? dmin, max = hi ?? dmax, path = '', area = '', seg = '', prev = 0, x0 = 0, xl = 0;
+    if (!(max - min >= 1)) { min -= 0.5; max = min + 1; }
+    const close = () => { if (seg) area += 'M' + x0 + ' 48' + seg + 'L' + xl + ' 48Z'; seg = ''; };
+    for (const [t, s] of hist) {
+      if (!fin(s[k])) { prev = 0; continue; }
+      const x = ((t - now + SPAN) / SPAN * 300).toFixed(1), y = (44 - (s[k] - min) / (max - min) * 40).toFixed(1);
+      if (!prev || t - prev > 3000) { close(); x0 = x; path += 'M'; } else path += 'L';  // a gap breaks the line
+      path += x + ' ' + y; seg += 'L' + x + ' ' + y; xl = x; prev = t;
+    }
+    close();
+    $('p_' + k).setAttribute('d', path);
+    $('a_' + k).setAttribute('d', area);
+    set('n_' + k, vals.length ? 'min ' + fmt(dmin) : 'no data');
+    set('x_' + k, vals.length ? 'max ' + fmt(dmax) : '');
+  }
+}
+
+async function poll() {
+  if (!uploading && !document.hidden) {
+    try {
+      const r = await fetch('/api/status', {signal: timeout(3000), cache: 'no-store'});
+      if (!r.ok) throw 0;
+      render(await r.json());
+      fails = 0; lastOk = Date.now();
+    } catch (e) {
+      fails++;
+    }
+    $('dot').className = 'dot ' + (fails ? 'bad' : 'ok');
+    $('lost').hidden = fails < 2;
+    $('main').classList.toggle('stale', fails >= 2);
+    if (fails >= 2) {  // the old state is not shown as if current
+      if (fails === 2 && lastOk) { set('hint', 'Last reported: ' + $('chip').textContent); $('hint').className = ''; }
+      set('chip', 'Reconnecting…');
+      $('chip').className = 'chip bad';
+      set('losttxt', 'Connection to the board lost. Reconnecting…' + (lastOk ? ' Last update ' + dur((Date.now() - lastOk) / 1000) + ' ago; the values below are old.' : '') +
+        ' Stop and Pause cannot reach it now: use the machine\'s emergency stop.');
+    }
+  }
+  setTimeout(poll, 1000);
+}
+
+// Stop and pause: "sent" first, then what the machine reports (the LPC decides).
+const say = (t, cls) => { set('msg', t); $('msg').className = cls || ''; };
+const clock = () => new Date().toLocaleTimeString();
+async function post(url, what, btn) {
+  btn.classList.add('sending');
+  say('Sending ' + what.toLowerCase() + '…', 'busy');
+  try {
+    let r;
+    try {
+      r = await fetch(url, {method: 'POST', headers: {'X-Requested-With': 'z1-webui'}, signal: timeout(4000), cache: 'no-store'});
+    } catch (e) {
+      return say(what + ' NOT sent: the board is not reachable. Use the machine\'s emergency stop if needed.', 'bad');
+    }
+    const text = (await r.text().catch(() => '')).trim();
+    if (!r.ok) return say(what + ' NOT sent: ' + (text || 'error ' + r.status) + '.', 'bad');
+    say(what + ' sent at ' + clock() + '. Waiting for the machine…', 'busy');
+    await wait(1200);
+    try {
+      render(await (await fetch('/api/status', {signal: timeout(3000), cache: 'no-store'})).json());
+      say(what + ' sent at ' + clock() + '. The machine now reports: ' + $('chip').textContent + '.', 'ok');
+    } catch (e) {
+      say(what + ' sent at ' + clock() + '; no status from the board since.', 'ok');
+    }
+  } finally {
+    btn.classList.remove('sending');
+  }
+}
+$('stop').onclick = () => post('/api/stop', 'Stop', $('stop'));
+$('pause').onclick = () => post('/api/pause', 'Pause', $('pause'));
+
+// Tabs, with arrow keys.
+const TABS = ['trends', 'system', 'maint'];
+function tab(name, focus) {
+  for (const t of TABS) {
+    $('t_' + t).setAttribute('aria-selected', t === name);
+    $('t_' + t).tabIndex = t === name ? 0 : -1;
+    $('p_' + t).hidden = t !== name;
+  }
+  if (focus) $('t_' + name).focus();
+  store('z1tab', name);
+  record();
+}
+TABS.forEach((t, i) => {
+  $('t_' + t).onclick = () => tab(t);
+  $('t_' + t).onkeydown = e => {
+    const d = {ArrowRight: 1, ArrowLeft: -1}[e.key];
+    if (d) { e.preventDefault(); tab(TABS[(i + d + 3) % 3], true); }
+  };
+});
+let saved = location.hash.slice(1);  // #system opens that tab
+saved ||= store('z1tab');
+tab(TABS.includes(saved) ? saved : 'trends');
+
+// Firmware update, with upload progress.
+$('up').onsubmit = ev => {
+  ev.preventDefault();
+  const f = $('file').files[0], x = new XMLHttpRequest(), um = t => $('upmsg').textContent = t;
+  if (!f) return;
+  const busy = on => { uploading = on; $('upbtn').disabled = $('file').disabled = on; };
+  busy(true);
+  $('upbar').hidden = false;
+  $('upfill').style.width = '0';
+  um('Uploading ' + f.name + '…');
+  x.open('POST', '/ota');
+  x.setRequestHeader('Content-Type', 'application/octet-stream');
+  x.upload.onprogress = e => {
+    const p = e.lengthComputable ? Math.round(e.loaded / e.total * 100) : 0;
+    $('upfill').style.width = p + '%';
+    um(p < 100 ? 'Uploading ' + f.name + '… ' + p + ' %' : 'Checking and installing…');
+  };
+  x.onload = () => { busy(false); um(x.status === 200 ? 'Installed. The board restarts; this page reconnects by itself.' : 'Not installed: ' + x.responseText.trim()); };
+  x.onerror = () => { busy(false); um('Upload failed: the connection was lost.'); };
+  x.send(f);
+};
+
+// Event log: polled every 2 s while open and visible, only what is new
+// (the X-Log-Next cursor); sticks to the end unless scrolled up.
+const logp = $('logp'), logel = $('log'), LOG_MAX = 1000;
+let logCur = null, logLines = 0, logTimer = 0, logBusy = false;
+const atEnd = () => logel.scrollHeight - logel.scrollTop - logel.clientHeight < 24;
+const lines = t => t.split('\n').length - 1;
+function logAdd(t) {
+  if (!t) return;
+  const end = atEnd();
+  logel.append(t);
+  logLines += lines(t);
+  while (logLines > LOG_MAX && logel.childNodes.length > 1) { logLines -= lines(logel.firstChild.data); logel.firstChild.remove(); }
+  if (end) logel.scrollTop = logel.scrollHeight;
+  else $('logend').hidden = false;
+}
+async function logPoll() {
+  clearTimeout(logTimer);
+  if (!logp.open || document.hidden) return set('logst', logp.open ? 'paused' : 'closed');
+  if (logBusy) return;
+  logBusy = true;
+  try {
+    const r = await fetch('/api/log' + (logCur == null ? '?n=200' : '?since=' + logCur), {signal: timeout(5000), cache: 'no-store'});
+    const t = await r.text();
+    if (!r.ok) throw said(t.trim() || 'error ' + r.status);
+    if (logCur != null && r.headers.get('X-Log-Gap')) logAdd('… lines left out here (the board restarted, or more came than fit) …\n');
+    logAdd(t);
+    logCur = r.headers.get('X-Log-Next') || logCur;
+    if (!logel.firstChild) logAdd('(empty)\n');
+    set('logst', 'live');
+  } catch (e) {
+    set('logst', 'not updating: ' + why(e) + ', retrying');
+  }
+  logBusy = false;
+  if (logp.open && !document.hidden) logTimer = setTimeout(logPoll, 2000);
+}
+logp.ontoggle = () => {
+  store('z1log', logp.open ? '1' : '0');
+  if (logp.open) logel.scrollTop = logel.scrollHeight;
+  logPoll();
+};
+logel.onscroll = () => { if (atEnd()) $('logend').hidden = true; };
+$('logend').onclick = () => { logel.scrollTop = logel.scrollHeight; $('logend').hidden = true; };
+if (store('z1log') === '1') logp.open = true;
+document.addEventListener('visibilitychange', logPoll);
+
+// Camera: about one picture a second while switched on and the tab is visible.
+let camOn = false, camGen = 0, camRunning = 0;
+async function camLoop(gen) {
+  camRunning = gen;
+  while (camOn && gen === camGen && !document.hidden) {
+    const t0 = Date.now();
+    try {
+      const r = await fetch('/api/snapshot', {signal: timeout(5000)});
+      if (r.status === 404) { camToggle(false); set('cammsg', 'This board has no camera.'); break; }
+      if (!r.ok) throw said((await r.text()).trim() || 'error ' + r.status);
+      const url = URL.createObjectURL(await r.blob()), img = $('cam'), old = img.src;
+      if (gen !== camGen || !camOn) { URL.revokeObjectURL(url); break; }
+      await Promise.race([new Promise(ok => { img.onload = img.onerror = ok; img.src = url; }), wait(3000)]);  // swap once decoded: no blank frame
+      img.hidden = false;
+      img.className = '';
+      $('camload').hidden = true;
+      if (old) URL.revokeObjectURL(old);
+      set('cammsg', 'Updated ' + clock());
+    } catch (e) {
+      $('cam').className = 'old';
+      set('camload', 'No picture yet');
+      $('camload').hidden = !$('cam').hidden;
+      set('cammsg', 'No picture: ' + why(e) + '. Retrying…');
+    }
+    await wait(Math.max(0, 1000 - (Date.now() - t0)));
+  }
+  if (camRunning === gen) camRunning = 0;
+}
+function camToggle(on) {
+  camOn = on;
+  $('camon').hidden = on;
+  $('camoff').hidden = $('camlive').hidden = !on;
+  const img = $('cam');
+  img.hidden = true;
+  if (img.src) { URL.revokeObjectURL(img.src); img.removeAttribute('src'); }
+  set('camload', 'Loading picture…');
+  $('camload').hidden = !on;
+  set('cammsg', on ? 'Loading picture…' : 'Camera off.');
+  camLoop(++camGen);
+}
+$('camon').onclick = () => camToggle(true);
+$('camoff').onclick = () => { camToggle(false); $('camon').focus(); };
+document.addEventListener('visibilitychange', () => { if (camOn && !document.hidden && !camRunning) camLoop(++camGen); });
+
+render({});
+set('chip', 'Connecting…');
+set('hint', '');
+poll();
+</script>
+</body>
+</html>

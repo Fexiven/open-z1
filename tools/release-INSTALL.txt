@@ -1,0 +1,5 @@
+1. pip install esptool   (Python 3.10+)
+2. Hold BOOT while switching the Z1 on, connected over USB.
+3. python flash.py install   (backs up the full flash to ~/open-z1-backups first)
+4. Switch the machine off and on again.
+Back to stock: python flash.py restore ~/open-z1-backups/z1-backup-<mac>-<time>.bin

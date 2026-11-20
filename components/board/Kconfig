@@ -1,0 +1,180 @@
+menu "Z1 Mainboard"
+    # Defaults are the Z1's wiring, as stock.
+
+    config Z1_LPC_UART_NUM
+        int "UART port connected to the LPC1768 motion controller"
+        range 1 2
+        default 1
+
+    config Z1_LPC_UART_TX_GPIO
+        int "ESP32-S3 GPIO driving LPC RX (LPC P2_9)"
+        range -1 48
+        default 42
+        help
+            -1 keeps the link disabled. Pins used by the USB console, flash or
+            PSRAM are refused at runtime.
+
+    config Z1_LPC_UART_RX_GPIO
+        int "ESP32-S3 GPIO reading LPC TX (LPC P2_8)"
+        range -1 48
+        default 41
+
+    config Z1_LPC_UART_BAUD
+        int "LPC link baud rate"
+        range 9600 921600
+        default 230400
+
+    # SD card: SDMMC slot 1, 4-bit, as stock.
+    config Z1_SD_MMC_FREQ_KHZ
+        int "SDMMC clock (kHz)"
+        default 20000
+
+    config Z1_SD_MMC_CLK_GPIO
+        int "SDMMC CLK GPIO"
+        range 0 48
+        default 39
+
+    config Z1_SD_MMC_CMD_GPIO
+        int "SDMMC CMD GPIO"
+        range 0 48
+        default 38
+
+    config Z1_SD_MMC_D0_GPIO
+        int "SDMMC D0 GPIO"
+        range 0 48
+        default 40
+
+    config Z1_SD_MMC_D1_GPIO
+        int "SDMMC D1 GPIO"
+        range 0 48
+        default 1
+
+    config Z1_SD_MMC_D2_GPIO
+        int "SDMMC D2 GPIO"
+        range 0 48
+        default 45
+
+    config Z1_SD_MMC_D3_GPIO
+        int "SDMMC D3 GPIO"
+        range 0 48
+        default 48
+
+    config Z1_SD_CD_GPIO
+        int "SD card-detect GPIO (low = card present)"
+        range 0 48
+        default 2
+        help
+            The card is mounted when it is inserted and unmounted when it is
+            pulled, as stock's TF card monitor does.
+
+    config Z1_SD_READ_ONLY
+        bool "Never write to the SD card"
+        default n
+        help
+            Every file operation that would modify the card is refused. Off,
+            as stock: the official app writes the card (uploads, rm, mv,
+            mkdir and settings).
+
+    config Z1_CAMERA_VFLIP
+        bool "Flip the camera picture vertically"
+        default y
+        help
+            Relative to the driver's state after init. The Z1 needs it, as
+            stock (vertical flip only; adding Z1_CAMERA_HMIRROR mirrored its
+            picture left-right).
+
+    config Z1_CAMERA_HMIRROR
+        bool "Mirror the camera picture horizontally"
+        default n
+
+    config Z1_LED_GPIO
+        int "Status LED GPIO (blinks 1 s on, 1 s off while the firmware runs, as stock)"
+        range -1 48
+        default 0
+        help
+            GPIO 0 is also the BOOT button; driven only after boot, as stock.
+            -1: none.
+
+    # Camera (ESP32-S3-EYE layout). It is off unless XCLK, SIOD, SIOC, VSYNC,
+    # HREF, PCLK and Y2-Y9 are all set; -1 for PWDN/RESET: not wired.
+    config Z1_CAMERA_PWDN_GPIO
+        int "Camera power-down GPIO"
+        range -1 48
+        default -1
+
+    config Z1_CAMERA_RESET_GPIO
+        int "Camera reset GPIO"
+        range -1 48
+        default -1
+
+    config Z1_CAMERA_XCLK_GPIO
+        int "Camera XCLK GPIO"
+        range -1 48
+        default 15
+
+    config Z1_CAMERA_SIOD_GPIO
+        int "Camera SCCB data (SIOD) GPIO"
+        range -1 48
+        default 4
+
+    config Z1_CAMERA_SIOC_GPIO
+        int "Camera SCCB clock (SIOC) GPIO"
+        range -1 48
+        default 5
+
+    config Z1_CAMERA_Y9_GPIO
+        int "Camera data Y9 GPIO"
+        range -1 48
+        default 16
+
+    config Z1_CAMERA_Y8_GPIO
+        int "Camera data Y8 GPIO"
+        range -1 48
+        default 17
+
+    config Z1_CAMERA_Y7_GPIO
+        int "Camera data Y7 GPIO"
+        range -1 48
+        default 18
+
+    config Z1_CAMERA_Y6_GPIO
+        int "Camera data Y6 GPIO"
+        range -1 48
+        default 12
+
+    config Z1_CAMERA_Y5_GPIO
+        int "Camera data Y5 GPIO"
+        range -1 48
+        default 10
+
+    config Z1_CAMERA_Y4_GPIO
+        int "Camera data Y4 GPIO"
+        range -1 48
+        default 8
+
+    config Z1_CAMERA_Y3_GPIO
+        int "Camera data Y3 GPIO"
+        range -1 48
+        default 9
+
+    config Z1_CAMERA_Y2_GPIO
+        int "Camera data Y2 GPIO"
+        range -1 48
+        default 11
+
+    config Z1_CAMERA_VSYNC_GPIO
+        int "Camera VSYNC GPIO"
+        range -1 48
+        default 6
+
+    config Z1_CAMERA_HREF_GPIO
+        int "Camera HREF GPIO"
+        range -1 48
+        default 7
+
+    config Z1_CAMERA_PCLK_GPIO
+        int "Camera PCLK GPIO"
+        range -1 48
+        default 13
+
+endmenu

@@ -1,0 +1,9 @@
+menu "Z1 OTA update"
+
+    config Z1_OTA_TEST_NEVER_VALID
+        bool "Test only: never mark a new image valid"
+        default n
+        help
+            Builds an image that always rolls back, to test the rollback path.
+
+endmenu
