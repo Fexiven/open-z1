@@ -325,6 +325,32 @@ static void on_event(const msg_t *m)
 // Takes the LPC image out of the bundle into /sd/lpc1768.bin. NULL on
 // success (*size, ver set), else the text for the app. The bundle is deleted
 // once opened, whatever the outcome.
+// IMAGE_TMP holds size bytes with CRC-32 crc: reads it back from the card and
+// renames it to LPCFW_IMAGE. NULL on success, else why not (IMAGE_TMP removed).
+static const char *keep_image(uint32_t crc, uint32_t size)
+{
+    FILE *chk = fopen(IMAGE_TMP, "rb");
+    uint32_t c = 0, got = 0;
+    size_t k;
+    while (chk && (k = fread(s_buf, 1, sizeof(s_buf), chk)) > 0) {
+        c = lpcfw_crc32(c, s_buf, k);
+        got += (uint32_t)k;
+    }
+    if (chk) {
+        fclose(chk);
+    }
+    const char *bad = c != crc || got != size                    ? "read-back mismatch"
+                      : !xfer_fs_keep(IMAGE_TMP, LPCFW_IMAGE, NULL) ? "cannot rename it"
+                                                                    : NULL;
+    if (bad) {
+        remove(IMAGE_TMP);
+    }
+    return bad;
+}
+
+// /sd/firmware.bin is Makera's bundle (its LPC image is taken out) or a bare
+// LPC image (lpc1768.bin from Makera's releases, or the community firmware),
+// copied as it is. Either way it ends up as LPCFW_IMAGE, checked.
 static const char *extract(uint32_t *size, char *ver, size_t ver_cap)
 {
     static char text[160];
@@ -342,12 +368,18 @@ static const char *extract(uint32_t *size, char *ver, size_t ver_cap)
     }
     struct stat st;
     uint8_t hdr[LPCFW_HDR_LEN];
-    lpcfw_hdr_t h;
-    const char *bad = fstat(fileno(in), &st) != 0 || fread(hdr, 1, sizeof(hdr), in) != sizeof(hdr)
-                          ? "unreadable"
-                          : lpcfw_hdr_parse(hdr, sizeof(hdr), (uint64_t)st.st_size, &h);
+    lpcfw_hdr_t h = {0};
+    const char *bad = fstat(fileno(in), &st) != 0 || fread(hdr, 1, sizeof(hdr), in) != sizeof(hdr) ? "unreadable"
+                                                                                                     : NULL;
+    bool raw = !bad && (hdr[0] | hdr[1] << 8 | hdr[2] << 16 | (uint32_t)hdr[3] << 24) != LPCFW_MAGIC;
+    if (!bad && raw) {
+        bad = st.st_size > LPCFW_LPC_MAX ? "too large for an LPC1768 image" : lpcfw_lpc_vectors_ok(hdr, st.st_size);
+        h.lpc_size = (uint32_t)st.st_size;
+    } else if (!bad) {
+        bad = lpcfw_hdr_parse(hdr, sizeof(hdr), (uint64_t)st.st_size, &h);
+    }
     const char *reply = bad ? FORMAT_ERROR : NULL;
-    if (!bad && (bad = lpcfw_hdr_lpc_ok(&h)) != NULL) {
+    if (!bad && !raw && (bad = lpcfw_hdr_lpc_ok(&h)) != NULL) {
         reply = h.flags & LPCFW_FLAG_LPC
                     ? FORMAT_ERROR
                     : "Error: this package has no motion-controller firmware (the open Mainboard firmware never "
@@ -359,19 +391,28 @@ static const char *extract(uint32_t *size, char *ver, size_t ver_cap)
         reply = "Error: cannot write " LPCFW_IMAGE "\r\n";
     }
     uint32_t lpc_crc = 0, written = 0;
-    uint8_t first[8] = {0};
     if (!bad) {
-        // One pass: the file CRC over everything but its own field, and the
-        // LPC image copied out as it goes by.
+        // One pass: the file CRC over everything but its own field (bundle),
+        // and the LPC image copied out as it goes by.
         uint32_t crc = lpcfw_crc32(0, hdr, 28);
         uint64_t pos = LPCFW_HDR_LEN;
+        uint8_t first[8] = {0};
         bool wrote = true;
         size_t k;
+        if (raw) {
+            memcpy(first, hdr, sizeof(first));
+            lpc_crc = lpcfw_crc32(0, hdr, sizeof(hdr));
+            wrote = fwrite(hdr, 1, sizeof(hdr), out) == sizeof(hdr);
+            written = sizeof(hdr);
+        }
         while ((k = fread(s_buf, 1, sizeof(s_buf), in)) > 0) {
-            crc = lpcfw_crc32(crc, s_buf, k);
-            size_t off, m = lpcfw_lpc_slice(&h, pos, k, &off);
-            for (size_t i = 0; i < m && written + i < 8; i++) {
-                first[written + i] = s_buf[off + i];
+            size_t off = 0, m = k;
+            if (!raw) {
+                crc = lpcfw_crc32(crc, s_buf, k);
+                m = lpcfw_lpc_slice(&h, pos, k, &off);
+                for (size_t i = 0; i < m && written + i < 8; i++) {
+                    first[written + i] = s_buf[off + i];
+                }
             }
             lpc_crc = lpcfw_crc32(lpc_crc, s_buf + off, m);
             wrote &= fwrite(s_buf + off, 1, m, out) == m;
@@ -382,42 +423,32 @@ static const char *extract(uint32_t *size, char *ver, size_t ver_cap)
         wrote &= fclose(out) == 0;
         if (ferror(in) || pos != (uint64_t)st.st_size || written != h.lpc_size) {
             bad = "read error";
-        } else if (crc != h.file_crc) {
+        } else if (!raw && crc != h.file_crc) {
             bad = "file CRC mismatch";
         } else {
             bad = lpcfw_lpc_vectors_ok(first, h.lpc_size);
         }
-        reply = bad ? FORMAT_ERROR : NULL;  // the package's fault; from here on the card's
+        reply = bad ? FORMAT_ERROR : NULL;  // the file's fault; from here on the card's
         if (!bad && !wrote) {
             bad = "write error";
         }
         if (!bad) {
-            // Read back what the card holds now.
-            FILE *chk = fopen(IMAGE_TMP, "rb");
-            uint32_t c = 0, got = 0;
-            while (chk && (k = fread(s_buf, 1, sizeof(s_buf), chk)) > 0) {
-                c = lpcfw_crc32(c, s_buf, k);
-                got += (uint32_t)k;
-            }
-            if (chk) {
-                fclose(chk);
-            }
-            if (c != lpc_crc || got != h.lpc_size) {
-                bad = "read-back mismatch";
-            } else if (!xfer_fs_keep(IMAGE_TMP, LPCFW_IMAGE, NULL)) {
-                bad = "cannot rename it";
-            }
+            bad = keep_image(lpc_crc, h.lpc_size);
+        } else {
+            remove(IMAGE_TMP);
         }
         if (bad && !reply) {
             reply = "Error: cannot write " LPCFW_IMAGE "\r\n";
-        }
-        if (bad) {
-            remove(IMAGE_TMP);
         }
     }
     fclose(in);
     if (bad) {
         ESP_LOGW(TAG, "%s refused: %s", LPCFW_BUNDLE, bad);
+    } else if (raw) {
+        *size = h.lpc_size;
+        snprintf(ver, ver_cap, "image");
+        ESP_LOGI(TAG, "%s: an LPC1768 image (%lu bytes, CRC32 %08lx) kept as %s", LPCFW_BUNDLE,
+                 (unsigned long)h.lpc_size, (unsigned long)lpc_crc, LPCFW_IMAGE);
     } else {
         *size = h.lpc_size;
         lpcfw_version_str(h.lpc_ver, ver, ver_cap);
@@ -481,8 +512,12 @@ static void do_upgrade(void)
         return;
     }
     image_set(ram, size);
-    snprintf(text, sizeof(text), "Info: motion controller firmware %s (%lu bytes) taken from the package.\r\n", ver,
-             (unsigned long)size);
+    if (!strcmp(ver, "image")) {
+        snprintf(text, sizeof(text), "Info: motion controller firmware (%lu bytes) checked.\r\n", (unsigned long)size);
+    } else {
+        snprintf(text, sizeof(text), "Info: motion controller firmware %s (%lu bytes) taken from the package.\r\n",
+                 ver, (unsigned long)size);
+    }
     notify(text);
     why = not_ready();
     if (!why && reset_lpc_on_command()) {
@@ -621,6 +656,17 @@ static const char *request(uint8_t kind)
         return "Error: busy, try again\r\n";
     }
     return NULL;
+}
+
+const char *lpcfw_can_upgrade(void)
+{
+    if (!s_queue) {
+        return "Error: firmware update not available\r\n";
+    }
+    if (atomic_load(&s_session) || atomic_load(&s_await) || atomic_load(&s_claim)) {
+        return "Error: a motion controller update is already running.\r\n";
+    }
+    return not_ready();
 }
 
 const char *lpcfw_upgrade(void)

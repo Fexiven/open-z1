@@ -33,6 +33,10 @@ bool ctrl_server_tx_busy(void);
 // none came yet.
 void ctrl_server_lpc_version(char *out, size_t cap);
 
+// The same announcement as sent, letters included ("2.3.0c-RC2" from a
+// community build; ctrl_server_lpc_version keeps "2.3.0" for the app).
+void ctrl_server_lpc_build(char *out, size_t cap);
+
 // Console `ctrl`: prints the LPC config/version state and, per connected
 // client, its output queue, bad frames and whether a download runs.
 void ctrl_server_dump(void);

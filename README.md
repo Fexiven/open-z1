@@ -3,16 +3,18 @@
 Open replacement firmware for the ESP32-S3 "Mainboard" of the Makera Z1.
 
 It replaces only the Mainboard (Wi-Fi, app connection, SD card, camera,
-updates). The motion controller keeps Makera's firmware, and the official
-Makera app works unchanged.
+updates). The motion controller keeps its own firmware (Makera's, or the
+open Carvera Community firmware), and the official Makera app works
+unchanged.
 
 ## Features
 
 - Works with the official Makera app: connect, jobs, files, config, camera
-- Signed updates over Wi-Fi, with automatic rollback
 - Web UI: machine state, job progress, statistics, camera, live log, Stop and Pause
+- One-click updates from GitHub for both chips: open-z1 for the Mainboard
+  (signed, with automatic rollback) and the motion controller's firmware
+  (Makera or Carvera Community)
 - Wi-Fi setup hotspot, protected with the machine's serial number
-- Motion-controller firmware updates from Makera's update packages
 
 ## Safety
 
@@ -36,14 +38,30 @@ folder:
 
 ## Updates
 
-Download `open-z1-<version>-z1-ota.bin` from Releases and upload it in the web
-UI. Check it against `SHA256SUMS` from the same release. Official releases are
-signed; a board accepts an update only if it is signed with the key of the
-image it runs.
+Open the web UI (the machine's IP address in a browser) → **Maintenance**.
+
+| Row | Updates | Sources |
+|---|---|---|
+| Mainboard | open-z1 | Stable or Beta releases of this repository |
+| Motion controller | the controller that moves the machine | Makera or Carvera Community, Stable or Beta |
+
+Press **Check**, then **Install**. The board downloads the release from GitHub
+itself. A motion controller update restarts the motion controller, and the
+machine homes; it is only possible while the machine is Idle.
+
+**Upload file** installs a downloaded file instead: `open-z1-<version>-z1-ota.bin`
+for the Mainboard (check it against `SHA256SUMS`), `lpc1768.bin`, Makera's
+`MakeraZ1-<version>-bin.bin` or `firmware-z1-<version>.bin` for the motion
+controller. Official open-z1 releases are signed; a board accepts a Mainboard
+update only if it is signed with the key of the image it runs.
 
 ## Back to stock
 
-Hold BOOT while switching on, then:
+Motion controller: Maintenance → **Makera** → Check → Install.
+
+Mainboard: hold BOOT while switching on, then restore the **oldest** backup
+with this machine's MAC in its name from `~/open-z1-backups` (the later ones are
+of open-z1):
 
 ```
 python flash.py restore ~/open-z1-backups/z1-backup-<mac>-<time>.bin

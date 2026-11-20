@@ -1,7 +1,8 @@
 #pragma once
 // The motion controller's (LPC1768) firmware update, as the official app's
 // Firmware Update page drives it on stock: the app uploads Makera's bundle to
-// /sd/firmware.bin and sends `upgrade` (older apps `reset`). Only the bundle's
+// /sd/firmware.bin and sends `upgrade` (older apps `reset`). A bare LPC1768
+// image there works too (the web UI's motion controller update). Only the bundle's
 // LPC1768 image is ever used; its ESP32 image is never installed (this
 // firmware updates itself over its own OTA only).
 //
@@ -52,6 +53,11 @@ void lpcfw_on_lpc_frame(uint8_t type, const uint8_t *payload, size_t n);
 // `upgrade` (and `reset` while a bundle is on the card). NULL if accepted
 // (results follow through notify), else the refusal text for the client.
 const char *lpcfw_upgrade(void);
+
+// Whether lpcfw_upgrade would be accepted now (no update running, no job, no
+// OTA, the machine Idle): NULL, else the refusal text. For callers that first
+// put a file in place.
+const char *lpcfw_can_upgrade(void);
 
 // `upgrade cancel`: removes /sd/lpc1768.bin unless it is being transferred.
 // NULL if accepted (results through notify), else the refusal.

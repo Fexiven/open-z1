@@ -5,5 +5,4 @@ menu "Z1 OTA update"
         default n
         help
             Builds an image that always rolls back, to test the rollback path.
-
 endmenu

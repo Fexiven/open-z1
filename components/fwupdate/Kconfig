@@ -1,0 +1,10 @@
+menu "Z1 firmware updates from GitHub"
+
+    config Z1_UPDATE_REPO
+        string "GitHub repository of open-z1 releases (owner/name)"
+        default "Fexiven/open-z1"
+        help
+            The web UI's "Check for update" installs open-z1-<version>-z1-ota.bin
+            from this repository's latest release.
+
+endmenu

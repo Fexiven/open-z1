@@ -1,5 +1,6 @@
 #include "ctrl_server.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -54,7 +55,8 @@ static const char *TAG = "ctrl";
 static SemaphoreHandle_t s_lock;
 client_t ctrl_clients[CONFIG_Z1_CTRL_MAX_CLIENTS];
 static uint32_t s_next_order;
-static char s_lpc_version[16];
+static char s_lpc_version[16];  // digits and dots only: what the app gets
+static char s_lpc_build[24];    // as the LPC sent it (a community build ends in "c")
 
 // An eventfd the server's select() also waits on, so a frame queued from
 // another task is sent at once instead of at the next select timeout.
@@ -408,6 +410,17 @@ void ctrl_server_lpc_version(char *out, size_t cap)
     ctrl_unlock();
 }
 
+void ctrl_server_lpc_build(char *out, size_t cap)
+{
+    if (!s_lock) {
+        snprintf(out, cap, "%s", "");
+        return;
+    }
+    ctrl_lock();
+    snprintf(out, cap, "%s", s_lpc_build);
+    ctrl_unlock();
+}
+
 void ctrl_server_on_lpc_frame(uint8_t type, const uint8_t *payload, size_t n)
 {
     if (!s_lock) {
@@ -421,9 +434,16 @@ void ctrl_server_on_lpc_frame(uint8_t type, const uint8_t *payload, size_t n)
         if (len == 0 || len >= sizeof(s_lpc_version)) {
             return;
         }
+        size_t full = len;  // plain characters only: it goes into the web UI's JSON
+        while (full < n && full + 1 < sizeof(s_lpc_build) &&
+               (isalnum(payload[full]) || payload[full] == '.' || payload[full] == '-' || payload[full] == '_')) {
+            full++;
+        }
         ctrl_lock();
         memcpy(s_lpc_version, payload, len);
         s_lpc_version[len] = '\0';
+        memcpy(s_lpc_build, payload, full);
+        s_lpc_build[full] = '\0';
         for (int i = 0; i < CONFIG_Z1_CTRL_MAX_CLIENTS; i++) {
             if (ctrl_clients[i].fd >= 0 && ctrl_clients[i].version_deadline_us) {
                 send_version(&ctrl_clients[i]);

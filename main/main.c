@@ -24,6 +24,7 @@
 #include "sdlog.h"
 #include "stats.h"
 #include "storage.h"
+#include "fwupdate.h"
 #include "webui.h"
 #include "wifi_mgr.h"
 
@@ -310,6 +311,9 @@ void app_main(void)
     }
     if (s_ota_listening && (err = webui_start(lpc_silent)) != ESP_OK) {
         ESP_LOGE(TAG, "web UI failed to start: %s", esp_err_to_name(err));
+    }
+    if (s_ota_listening && (err = fwupdate_start()) != ESP_OK) {
+        ESP_LOGE(TAG, "firmware updates from the web UI failed to start: %s", esp_err_to_name(err));
     }
     ota_confirm(ota_healthy, ota_hold);  // never restart under a job or an LPC update
     ESP_LOGI(TAG, "internal RAM free %u (largest block %u), PSRAM free %u",

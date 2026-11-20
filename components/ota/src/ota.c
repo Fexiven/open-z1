@@ -17,6 +17,7 @@
 #include "freertos/task.h"
 #include "http_origin.h"
 #include "ota_httpd.h"
+#include "ota_install.h"
 #include "ota_version.h"
 #include "wifi_mgr.h"
 
@@ -78,24 +79,17 @@ static esp_err_t info_get(httpd_req_t *req)
     return reply(req, "200 OK", line);
 }
 
-// The verified image in part may replace the running one: same project name
-// (it carries the board and the flash layout, see CMakeLists.txt) and, unless
-// forced, not an older version.
-static const char *check_desc(const esp_partition_t *part, bool force, const char **status)
+const char *ota_check_desc(const esp_app_desc_t *new, bool force, const char **status)
 {
-    esp_app_desc_t new_app;
-    if (esp_ota_get_partition_description(part, &new_app) != ESP_OK) {
-        return "image has no app description";
-    }
     const esp_app_desc_t *app = esp_app_get_description();
     *status = "400 Bad Request";
-    if (strncmp(new_app.project_name, app->project_name, sizeof(new_app.project_name)) != 0) {
-        ESP_LOGW(TAG, "image is %.32s, this board runs %s", new_app.project_name, app->project_name);
+    if (strncmp(new->project_name, app->project_name, sizeof(new->project_name)) != 0) {
+        ESP_LOGW(TAG, "image is %.32s, this board runs %s", new->project_name, app->project_name);
         return "built for another board or flash layout";
     }
-    if (!force && ota_version_cmp(new_app.version, app->version) < 0) {
-        ESP_LOGW(TAG, "image %.32s is older than %s", new_app.version, app->version);
-        return "older than the running version; add ?force=1 to downgrade";
+    if (!force && ota_version_cmp(new->version, app->version) < 0) {
+        ESP_LOGW(TAG, "image %.32s is older than %s", new->version, app->version);
+        return "older than the running version";
     }
     return NULL;
 }
@@ -135,9 +129,17 @@ static const char *receive(httpd_req_t *req, bool force, const char **status)
         }
         retries = 0;
         // esp_ota_write would refuse it too (first byte not 0xE9); this says why.
-        if (first && n >= 4 && (s_buf[0] | s_buf[1] << 8 | s_buf[2] << 16 | (uint32_t)s_buf[3] << 24) == BUNDLE_MAGIC) {
+        if (first && n >= 8 && (s_buf[0] | s_buf[1] << 8 | s_buf[2] << 16 | (uint32_t)s_buf[3] << 24) == BUNDLE_MAGIC) {
             *status = "400 Bad Request";
-            why = "a stock Makera bundle; this firmware installs only its own signed images";
+            why = "a Makera firmware package: use Upload file in the Motion controller row";
+            break;
+        }
+        // An LPC1768 image starts with its stack pointer (in its RAM) and a
+        // Thumb reset address (odd); an ESP32-S3 image with 0xE9.
+        uint32_t sp = s_buf[0] | s_buf[1] << 8 | s_buf[2] << 16 | (uint32_t)s_buf[3] << 24;
+        if (first && n >= 8 && sp >> 16 == 0x1000 && (s_buf[4] & 1)) {
+            *status = "400 Bad Request";
+            why = "a motion controller firmware file: use Upload file in the Motion controller row";
             break;
         }
         first = false;
@@ -167,17 +169,17 @@ static const char *receive(httpd_req_t *req, bool force, const char **status)
         ESP_LOGE(TAG, "end: %s", esp_err_to_name(err));
         return "image check failed";
     }
-    const char *why_not = check_desc(part, force, status);
+    esp_app_desc_t new_app;
+    if (esp_ota_get_partition_description(part, &new_app) != ESP_OK) {
+        return "image has no app description";
+    }
+    const char *why_not = ota_check_desc(&new_app, force, status);
     if (why_not) {
         return why_not;
     }
-    // Once more: a job armed just before the update began (or a button
-    // restart) must not be cut off by the restart. From here until the restart
-    // play refuses new jobs (ota_active()).
-    const char *busy = s_busy ? s_busy() : NULL;
+    const char *busy = ota_busy_now();
     if (busy) {
         *status = "409 Conflict";
-        ESP_LOGW(TAG, "not installed: %s", busy);
         return busy;
     }
     err = esp_ota_set_boot_partition(part);
@@ -228,19 +230,28 @@ bool ota_same_origin(httpd_req_t *req)
            http_origin_ok(origin, host);
 }
 
-static esp_err_t update_post(httpd_req_t *req)
+const char *ota_busy_now(void)
 {
-    if (!ota_same_origin(req)) {
-        return reply(req, "403 Forbidden", "cross-site request refused");
+    // A job armed just before the update began (or a button restart) must not
+    // be cut off by the restart. From here until the restart play refuses new
+    // jobs (ota_active()).
+    const char *busy = s_busy ? s_busy() : NULL;
+    if (busy) {
+        ESP_LOGW(TAG, "not installed: %s", busy);
     }
+    return busy;
+}
+
+const char *ota_claim(void)
+{
     if (migration_unfinished()) {
-        return reply(req, "409 Conflict", "flash layout migration not finished; rerun flash.py install");
+        return "flash layout migration not finished; rerun flash.py install";
     }
     if (atomic_load(&s_pending)) {
-        return reply(req, "409 Conflict", "the running image is not confirmed yet");
+        return "the running image is not confirmed yet";
     }
     if (atomic_exchange(&s_active, true)) {
-        return reply(req, "409 Conflict", "an update is already running");
+        return "an update is already running";
     }
     // s_active is set first, so a job or upload that starts from now on is
     // refused, and one that started before shows up here.
@@ -248,6 +259,22 @@ static esp_err_t update_post(httpd_req_t *req)
     if (why) {
         atomic_store(&s_active, false);
         ESP_LOGW(TAG, "update refused: %s", why);
+    }
+    return why;
+}
+
+void ota_release(void)
+{
+    atomic_store(&s_active, false);
+}
+
+static esp_err_t update_post(httpd_req_t *req)
+{
+    if (!ota_same_origin(req)) {
+        return reply(req, "403 Forbidden", "cross-site request refused");
+    }
+    const char *why = ota_claim();
+    if (why) {
         return reply(req, "409 Conflict", why);
     }
     char query[32], force[4];
@@ -286,7 +313,7 @@ esp_err_t ota_start(ota_busy_fn busy)
     cfg.send_wait_timeout = 2;
     cfg.stack_size = 8192;  // esp_ota_end verifies the RSA-3072 signature in this task
     cfg.lru_purge_enable = true;  // a dead client never blocks the next update
-    cfg.max_uri_handlers = 14;    // /ota (2) and the web UI's (11)
+    cfg.max_uri_handlers = 16;    // /ota (2), the web UI's (11), fwupdate's (3)
     esp_err_t err = httpd_start(&h, &cfg);
     if (err != ESP_OK) {
         return err;

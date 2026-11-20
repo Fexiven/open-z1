@@ -115,10 +115,6 @@ body.ovon{overflow:hidden}
 .sig i{width:4px;background:var(--line);border-radius:1px}
 .sig i.on{background:var(--ink)}
 .badge{font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;background:var(--idle-bg);margin-left:8px}
-.maint{grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
-input[type=file]{font:inherit;max-width:100%;min-height:44px}
-::file-selector-button{font:inherit;font-weight:600;min-height:44px;padding:8px 16px;margin-right:8px;border-radius:12px;border:1px solid var(--line);background:var(--sunk);color:var(--ink)}
-form{display:flex;flex-wrap:wrap;gap:8px}
 details>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;min-height:44px;margin:-8px 0}
 details>summary::-webkit-details-marker{display:none}
 details>summary::before{content:"";width:8px;height:8px;border:solid var(--ink2);border-width:0 2px 2px 0;transform:rotate(-45deg);transition:transform .15s;flex:none}
@@ -128,6 +124,18 @@ details>summary h2{margin:0}
 .logbox{position:relative}
 pre{background:var(--sunk);border-radius:12px;padding:16px;height:min(400px,60vh);overflow:auto;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all;margin:16px 0 0;overscroll-behavior:contain}
 #logend{position:absolute;right:12px;bottom:12px;min-height:36px;font-size:13px;box-shadow:var(--sh)}
+.fwrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;align-items:center;padding:16px 0;border-bottom:1px solid var(--line)}
+.fwrow:first-child{padding-top:0}.fwrow:last-child{border-bottom:0;padding-bottom:0}
+.fwname{grid-column:1;grid-row:1}.fwname b{display:block}.fwname span{font-size:14px;color:var(--ink2)}
+.fwbtn{display:flex;flex-wrap:wrap;gap:8px;grid-column:1/-1}.fwbtn>*{flex:1 1 auto}
+@media (min-width:600px){.fwbtn{justify-content:flex-end;grid-column:2;grid-row:1}.fwbtn>*{flex:none}}
+.fwopts{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px}
+.fwopts .seg{margin:0}.fwopts .seg button{flex:none;padding:6px 12px;min-height:36px}
+.fwst{grid-column:1/-1;font-size:14px;color:var(--ink2)}.fwst:empty{display:none}
+.fwst.new{color:var(--ink);font-weight:600}.fwst.ok{color:var(--ok)}.fwst.bad{color:var(--bad);font-weight:600;background:none}
+.fwrow .bar{grid-column:1/-1;margin:0;height:8px}
+@media (min-width:1040px){.fwrow{grid-template-columns:180px minmax(0,1fr) auto}.fwopts{grid-column:2;grid-row:1}
+.fwbtn{grid-column:3}.fwst,.fwrow .bar{grid-column:2/-1}}
 </style>
 </head>
 <body>
@@ -242,23 +250,25 @@ pre{background:var(--sunk);border-radius:12px;padding:16px;height:min(400px,60vh
 </div>
 
 <div role="tabpanel" id="p_maint" aria-labelledby="t_maint" hidden>
-<div class="grid maint">
-<div>
-<h3>Firmware update</h3>
-<form id="up">
-<input type="file" id="file" accept=".bin" required aria-label="Firmware image (.bin)">
-<button id="upbtn">Upload and install</button>
-</form>
-<div class="bar" id="upbar" hidden><div id="upfill"></div></div>
-<p id="upmsg" aria-live="polite"></p>
-<p class="note">Only images signed with this firmware's key, for this board, and not older than the running one
-install; never during a job. The board restarts after an install.</p>
+<div class="fwrow">
+<div class="fwname"><b>Mainboard</b><span id="esp_cur">–</span></div>
+<div class="fwopts"><div class="seg" id="esp_ch" role="group" aria-label="Mainboard release channel"><button type="button" data-c="stable">Stable</button><button type="button" data-c="beta">Beta</button></div></div>
+<div class="fwst" id="esp_msg" aria-live="polite"></div>
+<div class="fwbtn"><button type="button" id="esp_inst" hidden>Install</button><button type="button" id="esp_pick" aria-label="Upload file for the Mainboard">Upload file</button><button type="button" id="esp_chk">Check</button></div>
+<div class="bar" id="esp_bar" hidden><div id="esp_fill"></div></div>
+<input type="file" id="esp_file" accept=".bin" hidden>
 </div>
-<div>
-<h3>Diagnostics</h3>
-<a class="btn" href="/api/diag" download="z1-diagnostics.txt">Download diagnostics</a>
-<p class="note">Status, versions and the recent log; no Wi-Fi name, password, serial number or client addresses.</p>
+<div class="fwrow">
+<div class="fwname"><b>Motion controller</b><span id="lpc_cur">–</span></div>
+<div class="fwopts"><div class="seg" id="lpc_src" role="group" aria-label="Motion controller firmware source"><button type="button" data-c="makera">Makera</button><button type="button" data-c="community">Community</button></div><div class="seg" id="lpc_ch" role="group" aria-label="Motion controller release channel"><button type="button" data-c="stable">Stable</button><button type="button" data-c="beta">Beta</button></div></div>
+<div class="fwst" id="lpc_msg" aria-live="polite"></div>
+<div class="fwbtn"><button type="button" id="lpc_inst" hidden>Install</button><button type="button" id="lpc_pick" aria-label="Upload file for the motion controller">Upload file</button><button type="button" id="lpc_chk">Check</button></div>
+<div class="bar" id="lpc_bar" hidden><div id="lpc_fill"></div></div>
+<input type="file" id="lpc_file" accept=".bin" hidden>
 </div>
+<div class="fwrow">
+<div class="fwname"><b>Diagnostics</b><span>Status, versions and log; no passwords or serials</span></div>
+<div class="fwbtn"><a class="btn" href="/api/diag" download="z1-diagnostics.txt">Download</a></div>
 </div>
 </div>
 </section>
@@ -533,27 +543,138 @@ let saved = location.hash.slice(1);  // #system opens that tab
 saved ||= store('z1tab');
 tab(TABS.includes(saved) ? saved : 'trends');
 
-// Firmware update, with upload progress.
-$('up').onsubmit = ev => {
-  ev.preventDefault();
-  const f = $('file').files[0], x = new XMLHttpRequest(), um = t => $('upmsg').textContent = t;
-  if (!f) return;
-  const busy = on => { uploading = on; $('upbtn').disabled = $('file').disabled = on; };
+// Firmware of both chips: from GitHub (the board fetches the release itself)
+// or from a file. /api/update is polled every second while something runs.
+const HOMES = 'The motion controller restarts and the machine homes. Make sure nothing is in its way. Continue?';
+const FW = {esp: {up: '/ota'}, lpc: {up: '/api/lpcfw', warn: HOMES}};
+const RUN = ['checking', 'downloading', 'installing', 'restarting'];
+let fwTimer = 0;
+const fwWas = {}, fwWant = {}, fwPending = {};  // pending: a check waits for the running one
+const opt = (k, a, b) => store(k) === b ? b : a;
+const chan = k => opt('z1ch_' + k, 'stable', 'beta');
+const lpcSrc = () => opt('z1src_lpc', 'makera', 'community');
+const isCommunity = v => /\dc(-|$)/.test(v || '');  // as fwupdate.c's community_version
+const fwSay = (k, t, cls) => { set(k + '_msg', t); $(k + '_msg').className = 'fwst' + (cls ? ' ' + cls : ''); };
+async function fwPoll() {
+  clearTimeout(fwTimer);
+  let s;
+  try {
+    s = await (await fetch('/api/update', {signal: timeout(3000), cache: 'no-store'})).json();
+  } catch (e) {
+    // Restarting, or a check waiting: try again.
+    if (Object.values(fwWas).some(Boolean) || Object.values(fwPending).some(Boolean)) fwTimer = setTimeout(fwPoll, 2000);
+    return;
+  }
+  let any = false;
+  for (const k in FW) {
+    const u = s[k], run = RUN.includes(u.state);
+    any ||= run;
+    set(k + '_cur', !u.current ? 'unknown' : k === 'esp' ? 'open-z1 ' + u.current : (isCommunity(u.current) ? 'Community ' : 'Makera ') + u.current);
+    $(k + '_chk').disabled = run;
+    const mine = u.beta === (chan(k) === 'beta') && (k !== 'lpc' || u.src === lpcSrc());  // the check matches the options now
+    $(k + '_inst').hidden = !['available', 'current'].includes(u.state) || !mine;
+    $(k + '_inst').textContent = (u.state === 'current' ? 'Reinstall ' : 'Install ') + u.latest;
+    $(k + '_bar').hidden = !['downloading', 'installing'].includes(u.state);
+    $(k + '_fill').style.width = u.pct + '%';
+    if (u.state === 'downloading') fwWant[k] = u.latest;
+    if (u.state === 'idle' && fwWas[k] && fwWant[k]) {  // the Mainboard restarted during an install
+      u.current === fwWant[k].replace(/^v/, '') ? fwSay(k, 'Updated to ' + u.current + ' ✓', 'ok') : fwSay(k, 'Restarted on ' + u.current + '; the update did not take', 'bad');
+    } else if (u.state !== 'idle') {  // idle keeps what an upload said
+      const m = {
+        checking: ['Checking…'],
+        current: mine ? ['Up to date ✓', 'ok'] : ['Not checked yet'],
+        available: mine ? [u.latest + ' available', 'new'] : ['Not checked yet'],
+        downloading: ['Downloading ' + (u.latest || '') + '… ' + u.pct + ' %'],
+        installing: ['Installing… ' + u.pct + ' %'],
+        done: ['Installed ✓', 'ok'],
+        checkfail: mine ? ['Check failed: ' + u.msg, 'bad'] : ['Not checked yet'],
+        failed: ['Not updated: ' + u.msg, 'bad'],
+        restarting: ['Installed, restarting…'],
+      }[u.state];
+      if (m) fwSay(k, ...m);
+    }
+    fwWas[k] = run ? u.state : '';
+    if (!run) fwWant[k] = '';
+  }
+  if (any) fwTimer = setTimeout(fwPoll, 1000);
+  else for (const k in FW) if (fwPending[k]) { fwPending[k] = false; fwCheck(k); }
+}
+const fwCheck = k => fwPost(k, 'check ' + k + (chan(k) === 'beta' ? ' beta' : '') + (k === 'lpc' && lpcSrc() === 'community' ? ' community' : ''));
+async function fwPost(k, what) {
+  try {
+    const r = await fetch('/api/update', {method: 'POST', headers: {'X-Requested-With': 'z1-webui'}, body: what, signal: timeout(4000), cache: 'no-store'});
+    if (r.status === 409 && what.startsWith('check') && (await r.text()).includes('running')) {
+      fwPending[k] = true;  // checked as soon as the board is free
+      fwSay(k, 'Checking…');
+      return fwPoll();
+    }
+    if (!r.ok) return fwSay(k, (await r.text()).trim(), 'bad');
+  } catch (e) {
+    return fwSay(k, 'The board is not reachable', 'bad');
+  }
+  fwPoll();
+}
+function fwUpload(k, f) {
+  const x = new XMLHttpRequest();
+  const busy = on => {
+    uploading = on;
+    $(k + '_chk').disabled = $('esp_pick').disabled = $('lpc_pick').disabled = on;
+    $(k + '_bar').hidden = !on;
+    if (!on && Object.values(fwPending).some(Boolean)) fwPoll();  // a check asked for during the upload
+  };
   busy(true);
-  $('upbar').hidden = false;
-  $('upfill').style.width = '0';
-  um('Uploading ' + f.name + '…');
-  x.open('POST', '/ota');
+  $(k + '_fill').style.width = '0';
+  fwSay(k, 'Uploading ' + f.name + '…');
+  x.open('POST', FW[k].up);
   x.setRequestHeader('Content-Type', 'application/octet-stream');
   x.upload.onprogress = e => {
     const p = e.lengthComputable ? Math.round(e.loaded / e.total * 100) : 0;
-    $('upfill').style.width = p + '%';
-    um(p < 100 ? 'Uploading ' + f.name + '… ' + p + ' %' : 'Checking and installing…');
+    $(k + '_fill').style.width = p + '%';
+    fwSay(k, p < 100 ? 'Uploading ' + f.name + '… ' + p + ' %' : 'Checking…');
   };
-  x.onload = () => { busy(false); um(x.status === 200 ? 'Installed. The board restarts; this page reconnects by itself.' : 'Not installed: ' + x.responseText.trim()); };
-  x.onerror = () => { busy(false); um('Upload failed: the connection was lost.'); };
+  x.onload = () => {
+    busy(false);
+    if (x.status !== 200) return fwSay(k, 'Not installed: ' + x.responseText.trim(), 'bad');
+    if (k === 'esp') fwSay(k, 'Installed, restarting…'); else fwPoll();
+  };
+  x.onerror = () => { busy(false); fwSay(k, 'Upload failed: connection lost', 'bad'); };
   x.send(f);
-};
+}
+const segShow = (id, cur) => $(id).querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.c === cur()));
+// Changing a channel or source only changes the setting; Check asks GitHub.
+// The row then shows the last check if it was for this choice, else
+// "Not checked yet".
+function segBind(id, k, key, cur, ask) {
+  segShow(id, cur);
+  $(id).onclick = e => {
+    const b = e.target.closest('button');
+    if (!b || b.dataset.c === cur() || (ask && !ask(b.dataset.c))) return;
+    store(key, b.dataset.c);
+    segShow(id, cur);
+    $(k + '_inst').hidden = true;
+    fwSay(k, 'Not checked yet');
+    if (!uploading) fwPoll();  // shows the last check again if it was for this choice
+  };
+}
+segBind('esp_ch', 'esp', 'z1ch_esp', () => chan('esp'));
+segBind('lpc_ch', 'lpc', 'z1ch_lpc', () => chan('lpc'));
+segBind('lpc_src', 'lpc', 'z1src_lpc', lpcSrc, c => c !== 'community' ||
+  confirm('Carvera Community firmware is open source; its Z1 support is new and not yet tested with open-z1 or the Makera app. Makera\'s firmware can be reinstalled at any time. Use it?'));
+for (const k in FW) {
+  $(k + '_chk').onclick = () => {
+    if (!uploading) return fwCheck(k);
+    fwPending[k] = true;  // the board serves one request at a time: after the upload
+    fwSay(k, 'Checking…');
+  };
+  $(k + '_inst').onclick = () => (!FW[k].warn || confirm(FW[k].warn)) && fwPost(k, 'install ' + k + (chan(k) === 'beta' ? ' beta' : '') + (k === 'lpc' && lpcSrc() === 'community' ? ' community' : ''));
+  $(k + '_pick').onclick = () => $(k + '_file').click();
+  $(k + '_file').onchange = () => {
+    const f = $(k + '_file').files[0];
+    $(k + '_file').value = '';  // the same file can be picked again
+    if (f && (!FW[k].warn || confirm(FW[k].warn))) fwUpload(k, f);
+  };
+}
+fwPoll();
 
 // Event log: polled every 2 s while open and visible, only what is new
 // (the X-Log-Next cursor); sticks to the end unless scrolled up.
